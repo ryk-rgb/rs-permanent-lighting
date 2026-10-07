@@ -33,7 +33,11 @@ class SQLiteCursor:
     def execute(self, sql, params=()):
         sql=sql.replace("%s","?").replace("NOW()","CURRENT_TIMESTAMP")
         sql=sql.replace("SERIAL PRIMARY KEY","INTEGER PRIMARY KEY AUTOINCREMENT").replace("BYTEA","BLOB").replace("BOOLEAN","INTEGER")
-        self.cur.execute(sql, params); return self
+        if not params and ";" in sql.strip().rstrip(";"):
+            self.cur.executescript(sql)
+        else:
+            self.cur.execute(sql, params)
+        return self
     def fetchone(self):
         r=self.cur.fetchone(); return dict(r) if r is not None else None
     def fetchall(self):
