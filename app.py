@@ -19,6 +19,12 @@ GHL_WEBHOOK_URL = os.environ.get("GHL_WEBHOOK_URL", "")
 BUSINESS_NAME = os.environ.get("BUSINESS_NAME", "RS Permanent Lighting")
 BUSINESS_PHONE = os.environ.get("BUSINESS_PHONE", "704-621-6399")
 BUSINESS_WEBSITE = os.environ.get("BUSINESS_WEBSITE", "")
+ATTOM_API_KEY = os.environ.get("ATTOM_API_KEY", "")
+ATTOM_SLIPSTREAM_URL = os.environ.get("ATTOM_SLIPSTREAM_URL", "").strip()
+ATTOM_SLIPSTREAM_TOKEN = os.environ.get("ATTOM_SLIPSTREAM_TOKEN", "")
+ATTOM_SLIPSTREAM_MARKET = os.environ.get("ATTOM_SLIPSTREAM_MARKET", "*")
+ATTOM_SLIPSTREAM_AUTH_HEADER = os.environ.get("ATTOM_SLIPSTREAM_AUTH_HEADER", "Authorization")
+ATTOM_SLIPSTREAM_AUTH_PREFIX = os.environ.get("ATTOM_SLIPSTREAM_AUTH_PREFIX", "Bearer ")
 
 SANCTUARY = [
 "13702 Sage Thrasher Ln","13400 Sage Thrasher Ln","10310 Wildlife Rd","10220 Wildlife Rd",
@@ -100,6 +106,89 @@ def init_db():
                 (a,"Charlotte","NC","28278",secrets.token_urlsafe(10))
             )
     c.commit(); c.close()
+
+
+def _extract_photo_urls(obj):
+    urls=[]
+    def walk(x):
+        if isinstance(x, dict):
+            for k,v in x.items():
+                key=str(k).lower()
+                if isinstance(v,str) and v.startswith("http") and (
+                    "image" in key or "photo" in key or
+                    "listing-images.homejunction.com" in v or
+                    v.lower().split("?")[0].endswith((".jpg",".jpeg",".png",".webp"))
+                ):
+                    urls.append(v)
+                else:
+                    walk(v)
+        elif isinstance(x,list):
+            for v in x: walk(v)
+        elif isinstance(x,str) and x.startswith("http") and (
+            "listing-images.homejunction.com" in x or
+            x.lower().split("?")[0].endswith((".jpg",".jpeg",".png",".webp"))
+        ):
+            urls.append(x)
+    walk(obj)
+    dedup=[]
+    for u in urls:
+        if u not in dedup: dedup.append(u)
+    return dedup
+
+def fetch_attom_photo_for_property(pid):
+    p=get_property(pid)
+    if not p:
+        return False, "Property not found."
+    if not ATTOM_API_KEY:
+        return False, "ATTOM_API_KEY is not configured on Render yet."
+
+    full_address=f"{p['address']}, {p['city']}, {p['state']} {p['zip']}"
+    # First validate/match the address with ATTOM property API.
+    r=requests.get(
+        "https://api.gateway.attomdata.com/propertyapi/v1.0.0/property/id",
+        params={"address":full_address},
+        headers={"apikey":ATTOM_API_KEY,"Accept":"application/json"},
+        timeout=30
+    )
+    if not r.ok:
+        return False, f"ATTOM address match failed ({r.status_code})."
+    data=r.json()
+    attom_id=""
+    try:
+        attom_id=str(data["property"][0]["identifier"]["attomId"])
+    except Exception:
+        pass
+
+    # MLS/listing photos are separate ATTOM Slipstream data and require MLS licensing.
+    if not ATTOM_SLIPSTREAM_URL or not ATTOM_SLIPSTREAM_TOKEN:
+        note="ATTOM matched the address"
+        if attom_id: note+=f" (ATTOM ID {attom_id})"
+        note+=". Photo access still needs ATTOM Slipstream MLS credentials."
+        c=db(); cur=c.cursor(); cur.execute("UPDATE properties SET image_source=%s WHERE id=%s",(note,pid)); c.commit(); c.close()
+        return False, note
+
+    headers={"Accept":"application/json", ATTOM_SLIPSTREAM_AUTH_HEADER:f"{ATTOM_SLIPSTREAM_AUTH_PREFIX}{ATTOM_SLIPSTREAM_TOKEN}"}
+    params={"market":ATTOM_SLIPSTREAM_MARKET,"address":full_address}
+    lr=requests.get(ATTOM_SLIPSTREAM_URL,params=params,headers=headers,timeout=45)
+    if not lr.ok:
+        return False, f"ATTOM Slipstream lookup failed ({lr.status_code}). Check your MLS/photo entitlement and credentials."
+
+    urls=_extract_photo_urls(lr.json())
+    if not urls:
+        return False, "ATTOM matched the property but did not return a licensed listing photo for this address."
+
+    # Prefer the first image returned by the listing feed; user must still visually verify the front exterior.
+    ir=requests.get(urls[0],timeout=45)
+    if not ir.ok:
+        return False, "ATTOM returned a photo URL, but the image download failed."
+    mime=ir.headers.get("Content-Type","image/jpeg").split(";")[0]
+    c=db(); cur=c.cursor()
+    cur.execute(
+        "UPDATE properties SET original_image=%s,original_mime=%s,image_source=%s,image_license_ok=%s,status='READY_FOR_MOCKUP' WHERE id=%s",
+        (ir.content,mime,"ATTOM Slipstream MLS photo",True,pid)
+    )
+    c.commit(); c.close()
+    return True, "Licensed property photo fetched. Verify it is the correct front exterior before generating the AI mockup."
 
 def auth_required(fn):
     @functools.wraps(fn)
@@ -189,6 +278,8 @@ def add_property():
               (request.form["address"].strip(),request.form.get("city","Charlotte"),request.form.get("state","NC"),request.form.get("zip","28278"),request.form.get("owner_name",""),secrets.token_urlsafe(10)))
             pid=cur.cur.lastrowid
         c.commit(); c.close()
+        ok,msg=fetch_attom_photo_for_property(pid)
+        flash(msg)
         return redirect(url_for("property_detail",pid=pid))
     return page("Add property","""
     <div class="card"><h2>Add property</h2><form method=post>
@@ -244,7 +335,9 @@ def property_detail(pid):
     <div class=two>
       <div class=card><h3>1. Real house photo</h3>
         {% if p.original_image %}<img class=thumb src="/media/{{p.id}}/original">{% else %}<p class=muted>No photo uploaded.</p>{% endif %}
-        <form method=post enctype=multipart/form-data><input type=hidden name=action value=upload_original><input type=file name=image accept="image/*" required><button>Upload real photo</button></form>
+        <form method=post action="/property/{{p.id}}/fetch-photo" style="margin:10px 0"><button class=green>Fetch real property photo</button></form>
+        <p class=muted>The app automatically tries ATTOM after you add an address. This button retries the licensed-photo lookup.</p>
+        <form method=post enctype=multipart/form-data><input type=hidden name=action value=upload_original><input type=file name=image accept="image/*" required><button>Upload real photo manually</button></form>
       </div>
       <div class=card><h3>2. Lighting mockup</h3>
         {% if p.mockup_image %}<img class=thumb src="/media/{{p.id}}/mockup">{% else %}<p class=muted>No mockup yet.</p>{% endif %}
@@ -268,6 +361,17 @@ def property_detail(pid):
     </div>
     """
     return page(p["address"],body,p=p,public_url=public_url)
+
+
+@app.post("/property/<int:pid>/fetch-photo")
+@auth_required
+def fetch_property_photo(pid):
+    try:
+        ok,msg=fetch_attom_photo_for_property(pid)
+        flash(msg)
+    except Exception as e:
+        flash(f"Photo lookup error: {e}")
+    return redirect(url_for("property_detail",pid=pid))
 
 @app.post("/property/<int:pid>/generate")
 @auth_required
