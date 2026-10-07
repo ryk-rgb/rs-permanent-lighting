@@ -25,6 +25,7 @@ ATTOM_SLIPSTREAM_TOKEN = os.environ.get("ATTOM_SLIPSTREAM_TOKEN", "")
 ATTOM_SLIPSTREAM_MARKET = os.environ.get("ATTOM_SLIPSTREAM_MARKET", "*")
 ATTOM_SLIPSTREAM_AUTH_HEADER = os.environ.get("ATTOM_SLIPSTREAM_AUTH_HEADER", "Authorization")
 ATTOM_SLIPSTREAM_AUTH_PREFIX = os.environ.get("ATTOM_SLIPSTREAM_AUTH_PREFIX", "Bearer ")
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
 SANCTUARY = [
 "13702 Sage Thrasher Ln","13400 Sage Thrasher Ln","10310 Wildlife Rd","10220 Wildlife Rd",
@@ -107,6 +108,23 @@ def init_db():
             )
     c.commit(); c.close()
 
+
+
+def streetview_metadata_for_property(p):
+    if not GOOGLE_MAPS_API_KEY:
+        return None, "GOOGLE_MAPS_API_KEY is not configured on Render yet."
+    location=f"{p['address']}, {p['city']}, {p['state']} {p['zip']}"
+    r=requests.get(
+        "https://maps.googleapis.com/maps/api/streetview/metadata",
+        params={"location":location,"source":"outdoor","key":GOOGLE_MAPS_API_KEY},
+        timeout=20
+    )
+    if not r.ok:
+        return None, f"Google Street View metadata request failed ({r.status_code})."
+    data=r.json()
+    if data.get("status")!="OK":
+        return None, f"Google Street View returned {data.get('status','UNKNOWN')} for this address."
+    return data, None
 
 def _extract_photo_urls(obj):
     urls=[]
@@ -288,6 +306,35 @@ def add_property():
     <div class=two><div><label>ZIP</label><input name=zip value=28278></div><div><label>Owner name (optional)</label><input name=owner_name></div></div>
     <button class=green>Add property</button></form></div>""")
 
+
+@app.get("/property/<int:pid>/streetview")
+@auth_required
+def streetview_preview(pid):
+    p=get_property(pid)
+    if not p:
+        return "Not found",404
+    meta,err=streetview_metadata_for_property(p)
+    if err:
+        return page("Street View unavailable","<div class=card><h2>Street View</h2><p>{{msg}}</p><a class='btn' href='/property/{{pid}}'>Back</a></div>",msg=err,pid=pid)
+    location=f"{p['address']}, {p['city']}, {p['state']} {p['zip']}"
+    # Stream the image without storing or caching it.
+    r=requests.get(
+        "https://maps.googleapis.com/maps/api/streetview",
+        params={
+            "size":"640x480",
+            "location":location,
+            "source":"outdoor",
+            "fov":"90",
+            "pitch":"0",
+            "return_error_code":"true",
+            "key":GOOGLE_MAPS_API_KEY
+        },
+        timeout=30
+    )
+    if not r.ok:
+        return page("Street View unavailable","<div class=card><h2>Street View</h2><p>Google returned {{code}}.</p><a class='btn' href='/property/{{pid}}'>Back</a></div>",code=r.status_code,pid=pid)
+    return Response(r.content,mimetype=r.headers.get("Content-Type","image/jpeg"),headers={"Cache-Control":"no-store"})
+
 @app.get("/media/<int:pid>/<kind>")
 def media(pid,kind):
     if kind not in ("original","mockup"): return "Not found",404
@@ -335,7 +382,10 @@ def property_detail(pid):
     <div class=two>
       <div class=card><h3>1. Real house photo</h3>
         {% if p.original_image %}<img class=thumb src="/media/{{p.id}}/original">{% else %}<p class=muted>No photo uploaded.</p>{% endif %}
-        <form method=post action="/property/{{p.id}}/fetch-photo" style="margin:10px 0"><button class=green>Fetch real property photo</button></form>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+          <form method=post action="/property/{{p.id}}/fetch-photo"><button class=green>Fetch licensed property photo</button></form>
+          <a class="btn gray" href="/property/{{p.id}}/streetview" target="_blank">Test Street View</a>
+        </div>
         <p class=muted>The app automatically tries ATTOM after you add an address. This button retries the licensed-photo lookup.</p>
         <form method=post enctype=multipart/form-data><input type=hidden name=action value=upload_original><input type=file name=image accept="image/*" required><button>Upload real photo manually</button></form>
       </div>
