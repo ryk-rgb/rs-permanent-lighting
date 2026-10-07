@@ -1,4 +1,4 @@
-import os, io, csv, base64, secrets, functools, html
+import os, io, csv, base64, secrets, functools, html, sqlite3
 from datetime import datetime
 from flask import Flask, request, redirect, url_for, Response, render_template_string, flash
 import qrcode
@@ -28,10 +28,30 @@ SANCTUARY = [
 "12835 Ninebark Trl","13105 Ninebark Trl","10723 Green Heron Ct","10915 Hermit Thrush Ln"
 ]
 
+class SQLiteCursor:
+    def __init__(self, cur): self.cur=cur
+    def execute(self, sql, params=()):
+        sql=sql.replace("%s","?").replace("NOW()","CURRENT_TIMESTAMP")
+        sql=sql.replace("SERIAL PRIMARY KEY","INTEGER PRIMARY KEY AUTOINCREMENT").replace("BYTEA","BLOB").replace("BOOLEAN","INTEGER")
+        self.cur.execute(sql, params); return self
+    def fetchone(self):
+        r=self.cur.fetchone(); return dict(r) if r is not None else None
+    def fetchall(self):
+        return [dict(r) for r in self.cur.fetchall()]
+
+class SQLiteConn:
+    def __init__(self, path):
+        self.raw=sqlite3.connect(path)
+        self.raw.row_factory=sqlite3.Row
+    def cursor(self): return SQLiteCursor(self.raw.cursor())
+    def commit(self): return self.raw.commit()
+    def rollback(self): return self.raw.rollback()
+    def close(self): return self.raw.close()
+
 def db():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL is not configured")
-    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    if DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return SQLiteConn(os.environ.get("SQLITE_PATH","/tmp/rs_lighting.db"))
 
 def init_db():
     c = db()
@@ -156,9 +176,15 @@ def dashboard():
 def add_property():
     if request.method=="POST":
         c=db(); cur=c.cursor()
-        cur.execute("INSERT INTO properties(address,city,state,zip,owner_name,token) VALUES(%s,%s,%s,%s,%s,%s) RETURNING id",
-          (request.form["address"].strip(),request.form.get("city","Charlotte"),request.form.get("state","NC"),request.form.get("zip","28278"),request.form.get("owner_name",""),secrets.token_urlsafe(10)))
-        pid=cur.fetchone()["id"]; c.commit(); c.close()
+        if DATABASE_URL:
+            cur.execute("INSERT INTO properties(address,city,state,zip,owner_name,token) VALUES(%s,%s,%s,%s,%s,%s) RETURNING id",
+              (request.form["address"].strip(),request.form.get("city","Charlotte"),request.form.get("state","NC"),request.form.get("zip","28278"),request.form.get("owner_name",""),secrets.token_urlsafe(10)))
+            pid=cur.fetchone()["id"]
+        else:
+            cur.execute("INSERT INTO properties(address,city,state,zip,owner_name,token) VALUES(%s,%s,%s,%s,%s,%s)",
+              (request.form["address"].strip(),request.form.get("city","Charlotte"),request.form.get("state","NC"),request.form.get("zip","28278"),request.form.get("owner_name",""),secrets.token_urlsafe(10)))
+            pid=cur.cur.lastrowid
+        c.commit(); c.close()
         return redirect(url_for("property_detail",pid=pid))
     return page("Add property","""
     <div class="card"><h2>Add property</h2><form method=post>
@@ -193,9 +219,9 @@ def property_detail(pid):
                 data=f.read()
                 if len(data)>15*1024*1024: raise ValueError("Image must be under 15 MB.")
                 if action=="upload_original":
-                    cur.execute("UPDATE properties SET original_image=%s,original_mime=%s,status='READY_FOR_MOCKUP' WHERE id=%s",(psycopg2.Binary(data),f.mimetype,pid))
+                    cur.execute("UPDATE properties SET original_image=%s,original_mime=%s,status='READY_FOR_MOCKUP' WHERE id=%s",(data,f.mimetype,pid))
                 else:
-                    cur.execute("UPDATE properties SET mockup_image=%s,mockup_mime=%s,status='REVIEW' WHERE id=%s",(psycopg2.Binary(data),f.mimetype,pid))
+                    cur.execute("UPDATE properties SET mockup_image=%s,mockup_mime=%s,status='REVIEW' WHERE id=%s",(data,f.mimetype,pid))
             elif action=="save":
                 cur.execute("""UPDATE properties SET status=%s,image_source=%s,image_license_ok=%s,est_linear_ft=%s,quote_amount=%s,mailed=%s WHERE id=%s""",
                     (request.form.get("status","PHOTO_NEEDED"),request.form.get("image_source",""),bool(request.form.get("image_license_ok")),
@@ -262,7 +288,7 @@ def generate_mockup(pid):
             img=requests.get(item["url"],timeout=90).content
         else:
             raise RuntimeError("No image returned.")
-        c=db(); cur=c.cursor(); cur.execute("UPDATE properties SET mockup_image=%s,mockup_mime='image/png',status='REVIEW' WHERE id=%s",(psycopg2.Binary(img),pid)); c.commit(); c.close()
+        c=db(); cur=c.cursor(); cur.execute("UPDATE properties SET mockup_image=%s,mockup_mime='image/png',status='REVIEW' WHERE id=%s",(img,pid)); c.commit(); c.close()
         flash("AI mockup generated. Check the architecture carefully before approving.")
     except Exception as e:
         flash(str(e))
