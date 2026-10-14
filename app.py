@@ -278,6 +278,105 @@ def fetch_mapillary_photo_for_property(pid):
     c.commit(); c.close()
     return True, f"Mapillary photo loaded from {best['_distance']:.0f} m away and camera angle checked. Verify this is the exact front exterior before generating the mockup."
 
+def _kartaview_collect_photos(obj):
+    out=[]
+    def walk(x):
+        if isinstance(x,dict):
+            keys=set(x.keys())
+            if ("lat" in keys and ("lng" in keys or "lon" in keys)) and any(k in keys for k in ("name","lth_name","th_name","photo","image")):
+                out.append(x)
+            for v in x.values(): walk(v)
+        elif isinstance(x,list):
+            for v in x: walk(v)
+    walk(obj)
+    return out
+
+def _kartaview_url(v):
+    if not v: return ""
+    v=str(v)
+    if v.startswith("http://") or v.startswith("https://"): return v
+    return "https://api.openstreetcam.org/" + v.lstrip("/")
+
+def fetch_kartaview_photo_for_property(pid):
+    p=get_property(pid)
+    if not p:
+        return False, "Property not found."
+    geo,err=_geocode_property(p)
+    if err:
+        return False, err
+    lat,lon=geo["lat"],geo["lon"]
+    radius=120
+    try:
+        r=requests.post(
+            "https://api.openstreetcam.org/1.0/list/nearby-photos/",
+            data={"lat":lat,"lng":lon,"radius":radius,"page":1,"ipp":100},
+            timeout=35,
+            headers={"User-Agent":"RS-Permanent-Lighting/1.0"}
+        )
+    except Exception as e:
+        return False, f"KartaView request failed: {e}"
+    if not r.ok:
+        return False, f"KartaView search failed ({r.status_code})."
+    try:
+        payload=r.json()
+    except Exception:
+        return False, "KartaView returned an unreadable response."
+    status=payload.get("status") if isinstance(payload,dict) else None
+    if isinstance(status,dict):
+        code=status.get("apiCode")
+        if code not in (None,600,"600"):
+            return False, f"KartaView API returned {code}: {status.get('apiMessage','request failed')}"
+
+    photos=_kartaview_collect_photos(payload)
+    candidates=[]
+    for item in photos:
+        try:
+            ilat=float(item.get("lat"))
+            ilon=float(item.get("lng",item.get("lon")))
+            dist=_haversine_m(lat,lon,ilat,ilon)
+            if dist>radius*1.4: continue
+            heading=item.get("heading")
+            heading=float(heading) if heading not in (None,"") else None
+            toward=_bearing_deg(ilat,ilon,lat,lon)
+            angle=_angle_delta(heading,toward) if heading is not None else 90
+            score=dist + angle*1.1
+            if angle>110: score+=150
+            image_url=_kartaview_url(item.get("lth_name") or item.get("name") or item.get("th_name") or item.get("photo") or item.get("image"))
+            if not image_url: continue
+            candidates.append((score,dist,angle,item,image_url))
+        except Exception:
+            continue
+    if not candidates:
+        return False, f"No KartaView street-level images found within about {radius} meters."
+
+    candidates.sort(key=lambda x:x[0])
+    score,dist,angle,best,image_url=candidates[0]
+    try:
+        img=requests.get(image_url,timeout=45,headers={"User-Agent":"RS-Permanent-Lighting/1.0"},allow_redirects=True)
+    except Exception as e:
+        return False, f"KartaView image download failed: {e}"
+    if not img.ok:
+        return False, f"KartaView found imagery but image download failed ({img.status_code})."
+    ctype=img.headers.get("Content-Type","image/jpeg")
+    if "image" not in ctype.lower():
+        return False, "KartaView returned a nearby record but not a usable image."
+    mime=ctype.split(";")[0]
+    photo_id=best.get("id","")
+    user=best.get("user","")
+    date=best.get("date_added","")
+    attribution="KartaView/OpenStreetCam"
+    if photo_id: attribution+=f" photo {photo_id}"
+    if user: attribution+=f" by {user}"
+    if date: attribution+=f" ({date})"
+    attribution+=f"; {dist:.0f} m from property. Verify exact house and permitted marketing use before mailing."
+    conn=db(); cur=conn.cursor()
+    cur.execute(
+        "UPDATE properties SET original_image=%s,original_mime=%s,image_source=%s,image_license_ok=%s,status='READY_FOR_MOCKUP' WHERE id=%s",
+        (img.content,mime,attribution,False,pid)
+    )
+    conn.commit(); conn.close()
+    return True, f"KartaView photo loaded from {dist:.0f} m away. Verify it is the exact front exterior before generating the mockup."
+
 def _extract_photo_urls(obj):
     urls=[]
     def walk(x):
@@ -537,6 +636,7 @@ def property_detail(pid):
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
           <form method=post action="/property/{{p.id}}/fetch-photo"><button class=green>Fetch licensed property photo</button></form>
           <form method=post action="/property/{{p.id}}/mapillary"><button>Try Mapillary photo</button></form>
+          <form method=post action="/property/{{p.id}}/kartaview"><button>Try KartaView photo</button></form>
           <a class="btn gray" href="/property/{{p.id}}/streetview" target="_blank">Test Street View</a>
         </div>
         <p class=muted>The app automatically tries ATTOM after you add an address. This button retries the licensed-photo lookup.</p>
@@ -584,6 +684,16 @@ def fetch_mapillary_photo(pid):
         flash(msg)
     except Exception as e:
         flash(f"Mapillary lookup error: {e}")
+    return redirect(url_for("property_detail",pid=pid))
+
+@app.post("/property/<int:pid>/kartaview")
+@auth_required
+def fetch_kartaview_photo(pid):
+    try:
+        ok,msg=fetch_kartaview_photo_for_property(pid)
+        flash(msg)
+    except Exception as e:
+        flash(f"KartaView lookup error: {e}")
     return redirect(url_for("property_detail",pid=pid))
 
 @app.post("/property/<int:pid>/generate")
