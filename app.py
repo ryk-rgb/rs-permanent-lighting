@@ -1,4 +1,4 @@
-import os, io, csv, base64, secrets, functools, html, sqlite3
+import os, io, csv, base64, secrets, functools, html, sqlite3, math
 from datetime import datetime
 from flask import Flask, request, redirect, url_for, Response, render_template_string, flash
 import qrcode
@@ -26,6 +26,8 @@ ATTOM_SLIPSTREAM_MARKET = os.environ.get("ATTOM_SLIPSTREAM_MARKET", "*")
 ATTOM_SLIPSTREAM_AUTH_HEADER = os.environ.get("ATTOM_SLIPSTREAM_AUTH_HEADER", "Authorization")
 ATTOM_SLIPSTREAM_AUTH_PREFIX = os.environ.get("ATTOM_SLIPSTREAM_AUTH_PREFIX", "Bearer ")
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+MAPILLARY_ACCESS_TOKEN = os.environ.get("MAPILLARY_ACCESS_TOKEN", "")
+MAPILLARY_RADIUS_METERS = int(os.environ.get("MAPILLARY_RADIUS_METERS", "90"))
 
 TARGET_PROPERTIES = [{"address":"433 Hollis Road","city":"Charlotte","state":"NC","zip":"28209"},{"address":"529 Kenlough Drive","city":"Charlotte","state":"NC","zip":"28209"},{"address":"1901 Runnymede Lane","city":"Charlotte","state":"NC","zip":"28211"},{"address":"844 Armstrong Road","city":"Belmont","state":"NC","zip":"28012"},{"address":"631 May Green Drive","city":"Clover","state":"SC","zip":"29710"},{"address":"12414 Tantallon Court","city":"Pineville","state":"NC","zip":"28134"},{"address":"2065 Marquesas Avenue","city":"Tega Cay","state":"SC","zip":"29708"},{"address":"5480 Glen Forest Drive","city":"Charlotte","state":"NC","zip":"28226"},{"address":"4843 Lindstrom Drive","city":"Charlotte","state":"NC","zip":"28226"},{"address":"512 Olmsted Park Place","city":"Charlotte","state":"NC","zip":"28203"},{"address":"7615 Quail Hill Road","city":"Charlotte","state":"NC","zip":"28210"},{"address":"16516 Riverpointe Drive","city":"Charlotte","state":"NC","zip":"28278"},{"address":"4206 Foxmoor Drive #L43B2M19-181","city":"Charlotte","state":"NC","zip":"28226"},{"address":"5109 Wedgewood Drive","city":"Charlotte","state":"NC","zip":"28210"},{"address":"4124 Bridgewood Lane","city":"Charlotte","state":"NC","zip":"28226"},{"address":"423 Crisfield Court","city":"York","state":"SC","zip":"29745"},{"address":"105 Coburn Court","city":"Fort Mill","state":"SC","zip":"29715"},{"address":"1816 Cedar Park Drive","city":"Pineville","state":"NC","zip":"28134"},{"address":"976 Park Slope Drive","city":"Charlotte","state":"NC","zip":"28209"},{"address":"5807 Sharon Road #F","city":"Charlotte","state":"NC","zip":"28210"},{"address":"529 Putting Drive","city":"Fort Mill","state":"SC","zip":"29715"},{"address":"1333 Secret Path Drive","city":"Fort Mill","state":"SC","zip":"29708"},{"address":"7007 Shaw Court","city":"Indian Land","state":"SC","zip":"29707"},{"address":"727 Clayfield Court","city":"Charlotte","state":"NC","zip":"28209"},{"address":"12726 Axel Road","city":"Pineville","state":"NC","zip":"28134"},{"address":"12708 Axel Road","city":"Pineville","state":"NC","zip":"28134"},{"address":"12720 Axel Road","city":"Pineville","state":"NC","zip":"28134"},{"address":"1710 Evergreen Drive","city":"Charlotte","state":"NC","zip":"28208"},{"address":"15506 Parkside Crossing Drive","city":"Charlotte","state":"NC","zip":"28278"},{"address":"12716 Axel Road","city":"Pineville","state":"NC","zip":"28134"},{"address":"12730 Axel Road","city":"Pineville","state":"NC","zip":"28134"},{"address":"12712 Axel Road","city":"Pineville","state":"NC","zip":"28134"},{"address":"3820 Planters Watch Drive","city":"Charlotte","state":"NC","zip":"28278"},{"address":"7515 Starvalley Drive","city":"Charlotte","state":"NC","zip":"28210"},{"address":"9482 Ketchum Drive","city":"Gastonia","state":"NC","zip":"28056"},{"address":"4053 Navajo Court","city":"Rock Hill","state":"SC","zip":"29732"},{"address":"12734 Axel Road","city":"Pineville","state":"NC","zip":"28134"},{"address":"13918 Wild Heather Court","city":"Charlotte","state":"NC","zip":"28273"},{"address":"3013 Callaway Court","city":"Cramerton","state":"NC","zip":"28032"},{"address":"6000 Gray Gate Lane #I","city":"Charlotte","state":"NC","zip":"28210"},{"address":"433 Battery Circle","city":"Clover","state":"SC","zip":"29710"},{"address":"11101 Sevilla Court","city":"Charlotte","state":"NC","zip":"28226"},{"address":"4620 Piedmont Row Road","city":"Charlotte","state":"NC","zip":"28210"},{"address":"10905 Rail Tye Place","city":"Pineville","state":"NC","zip":"28134"},{"address":"5718 Natick Drive","city":"Charlotte","state":"NC","zip":"28214"},{"address":"1761 J Julian Lane","city":"Charlotte","state":"NC","zip":"28208"},{"address":"1765 J Julian Lane","city":"Charlotte","state":"NC","zip":"28208"},{"address":"1773 J Julian Lane","city":"Charlotte","state":"NC","zip":"28208"},{"address":"420 English Ivy Court","city":"Fort Mill","state":"SC","zip":"29715"},{"address":"115 Adcock Street","city":"Belmont","state":"NC","zip":"28012"},{"address":"9719 Nine Eagles Lane","city":"Charlotte","state":"NC","zip":"28278"},{"address":"9715 Nine Eagles Lane","city":"Charlotte","state":"NC","zip":"28278"},{"address":"3200 Beaty Road","city":"Gastonia","state":"NC","zip":"28056"},{"address":"1811 Queens Road W","city":"Charlotte","state":"NC","zip":"28207"},{"address":"19800 Youngblood Road W","city":"Charlotte","state":"NC","zip":"28278"},{"address":"13702 Sage Thrasher Lane","city":"Charlotte","state":"NC","zip":"28278"},{"address":"6000 Midsomer Road","city":"Charlotte","state":"NC","zip":"28214"},{"address":"9305 White Ibis Court","city":"Belmont","state":"NC","zip":"28012"},{"address":"5620 Merry Mount Drive","city":"Charlotte","state":"NC","zip":"28226"},{"address":"2129 Queens Road W #403","city":"Charlotte","state":"NC","zip":"28207"},{"address":"6239 Sharon Hills Road","city":"Charlotte","state":"NC","zip":"28210"},{"address":"5204 Masons Ferry Road","city":"Clover","state":"SC","zip":"29710"},{"address":"932 Heather Lane","city":"Charlotte","state":"NC","zip":"28209"},{"address":"11828 Stephenson Court","city":"Charlotte","state":"NC","zip":"28277"},{"address":"15700 Youngblood Road","city":"Charlotte","state":"NC","zip":"28278"},{"address":"401 McDonald Avenue","city":"Charlotte","state":"NC","zip":"28203"},{"address":"10220 Sweetleaf Place","city":"Charlotte","state":"NC","zip":"28278"},{"address":"5549 Fairview Road","city":"Charlotte","state":"NC","zip":"28209"},{"address":"16525 Forest Home Road","city":"Charlotte","state":"NC","zip":"28278"},{"address":"6510 Sharon Hills Road","city":"Charlotte","state":"NC","zip":"28210"},{"address":"907 Osprey Bluff Court #1","city":"Belmont","state":"SC","zip":"29710"},{"address":"1218 Townes Road","city":"Charlotte","state":"NC","zip":"28209"},{"address":"6323 Saint Stephen Lane","city":"Charlotte","state":"NC","zip":"28210"},{"address":"1525 Lynway Drive","city":"Charlotte","state":"NC","zip":"28203"},{"address":"632 Ideal Way","city":"Charlotte","state":"NC","zip":"28203"},{"address":"2625/2655 Pleasant Road","city":"Fort Mill","state":"SC","zip":"29715"},{"address":"2129 Queens Road W #201","city":"Charlotte","state":"NC","zip":"28207"},{"address":"249 Blue Heron Drive","city":"Rock Hill","state":"SC","zip":"29732"},{"address":"5650 Riverfront Road","city":"Clover","state":"SC","zip":"29710"},{"address":"5555 Fairview Road","city":"Charlotte","state":"NC","zip":"28209"},{"address":"3240 Sunset Drive","city":"Charlotte","state":"NC","zip":"28209"},{"address":"2161 Windy Oaks Road","city":"Fort Mill","state":"SC","zip":"29708"},{"address":"10601 Wildlife Road","city":"Charlotte","state":"NC","zip":"28278"},{"address":"3407 Willow Oak Road","city":"Charlotte","state":"NC","zip":"28209"},{"address":"2640 Sadler Road","city":"Charlotte","state":"NC","zip":"28278"},{"address":"16312 Cozy Cove Road","city":"Charlotte","state":"NC","zip":"28278"},{"address":"331 Ivy Arbor Circle","city":"Rock Hill","state":"SC","zip":"29732"},{"address":"13117 Hamilton Place Drive","city":"Charlotte","state":"NC","zip":"28273"},{"address":"2250 Colony Road #A","city":"Charlotte","state":"NC","zip":"28209"},{"address":"10930 Green Heron Court","city":"Charlotte","state":"NC","zip":"28278"},{"address":"506 Joslin Pointe Lane","city":"Rock Hill","state":"SC","zip":"29732"},{"address":"15650 Youngblood Road","city":"Charlotte","state":"NC","zip":"28278"},{"address":"10310 Wildlife Road","city":"Charlotte","state":"NC","zip":"28278"},{"address":"10717 Wildlife Road","city":"Charlotte","state":"NC","zip":"28278"},{"address":"13703 Grand Palisades Parkway","city":"Charlotte","state":"NC","zip":"28278"},{"address":"5907 Kiowa Road","city":"Clover","state":"SC","zip":"29710"},{"address":"1920 Marlin Drive","city":"Lake Wylie","state":"SC","zip":"29710"},{"address":"2354 Valelake Road","city":"York","state":"SC","zip":"29745"},{"address":"3416 Windsor Drive","city":"Charlotte","state":"NC","zip":"28209"},{"address":"4448 Halstead Drive","city":"Charlotte","state":"NC","zip":"28209"}]
 
@@ -119,6 +121,128 @@ def streetview_metadata_for_property(p):
     if data.get("status")!="OK":
         return None, f"Google Street View returned {data.get('status','UNKNOWN')} for this address."
     return data, None
+
+def _attom_match_with_coords(p):
+    if not ATTOM_API_KEY:
+        return None, "ATTOM_API_KEY is not configured."
+    full_address=f"{p['address']}, {p['city']}, {p['state']} {p['zip']}"
+    r=requests.get(
+        "https://api.gateway.attomdata.com/propertyapi/v1.0.0/property/id",
+        params={"address":full_address},
+        headers={"apikey":ATTOM_API_KEY,"Accept":"application/json"},
+        timeout=30
+    )
+    if not r.ok:
+        return None, f"ATTOM address match failed ({r.status_code})."
+    try:
+        prop=r.json()["property"][0]
+        loc=prop.get("location") or {}
+        lat=float(loc.get("latitude"))
+        lon=float(loc.get("longitude"))
+        return {"lat":lat,"lon":lon,"attom_id":str((prop.get("identifier") or {}).get("attomId") or "")}, None
+    except Exception:
+        return None, "ATTOM matched the property but did not return usable coordinates."
+
+def _haversine_m(lat1,lon1,lat2,lon2):
+    r=6371008.8
+    p1=math.radians(lat1); p2=math.radians(lat2)
+    dp=math.radians(lat2-lat1); dl=math.radians(lon2-lon1)
+    a=math.sin(dp/2)**2+math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+    return 2*r*math.asin(math.sqrt(a))
+
+def _bearing_deg(lat1,lon1,lat2,lon2):
+    p1=math.radians(lat1); p2=math.radians(lat2); dl=math.radians(lon2-lon1)
+    y=math.sin(dl)*math.cos(p2)
+    x=math.cos(p1)*math.sin(p2)-math.sin(p1)*math.cos(p2)*math.cos(dl)
+    return (math.degrees(math.atan2(y,x))+360)%360
+
+def _angle_delta(a,b):
+    return abs((a-b+180)%360-180)
+
+def fetch_mapillary_photo_for_property(pid):
+    p=get_property(pid)
+    if not p:
+        return False, "Property not found."
+    if not MAPILLARY_ACCESS_TOKEN:
+        return False, "MAPILLARY_ACCESS_TOKEN is not configured on Render."
+
+    geo,err=_attom_match_with_coords(p)
+    if err:
+        return False, err
+    lat,lon=geo["lat"],geo["lon"]
+    radius=max(30,min(MAPILLARY_RADIUS_METERS,200))
+    dlat=radius/111111.0
+    dlon=radius/(111111.0*max(0.2,math.cos(math.radians(lat))))
+    bbox=f"{lon-dlon},{lat-dlat},{lon+dlon},{lat+dlat}"
+    fields="id,thumb_2048_url,thumb_1024_url,computed_geometry,captured_at,compass_angle,camera_type,creator"
+    r=requests.get(
+        "https://graph.mapillary.com/images",
+        params={"access_token":MAPILLARY_ACCESS_TOKEN,"fields":fields,"bbox":bbox,"limit":80},
+        timeout=35
+    )
+    if not r.ok:
+        detail=""
+        try: detail=(r.json().get("error") or {}).get("message","")
+        except Exception: pass
+        return False, f"Mapillary search failed ({r.status_code}){': '+detail if detail else ''}."
+
+    candidates=[]
+    for item in r.json().get("data",[]):
+        geom=item.get("computed_geometry") or {}
+        coords=geom.get("coordinates") or []
+        if len(coords)<2: continue
+        try:
+            ilon,ilat=float(coords[0]),float(coords[1])
+            dist=_haversine_m(lat,lon,ilat,ilon)
+            if dist>radius*1.35: continue
+            heading=float(item.get("compass_angle")) if item.get("compass_angle") is not None else None
+            toward=_bearing_deg(ilat,ilon,lat,lon)
+            angle=_angle_delta(heading,toward) if heading is not None else 90
+            # Strongly prefer cameras aimed toward the parcel, then distance.
+            score=dist + angle*1.25
+            if angle>100: score+=180
+            item["_distance"]=dist; item["_angle"]=angle; item["_score"]=score
+            candidates.append(item)
+        except Exception:
+            continue
+
+    if not candidates:
+        return False, f"No Mapillary street-level images found within about {radius} meters."
+    candidates.sort(key=lambda x:x["_score"])
+    best=candidates[0]
+    image_url=best.get("thumb_2048_url") or best.get("thumb_1024_url")
+    if not image_url:
+        # Thumbnail URLs can also be fetched from the image entity endpoint.
+        ir=requests.get(
+            f"https://graph.mapillary.com/{best['id']}",
+            params={"access_token":MAPILLARY_ACCESS_TOKEN,"fields":"thumb_2048_url,thumb_1024_url,creator,captured_at"},
+            timeout=25
+        )
+        if ir.ok:
+            meta=ir.json(); image_url=meta.get("thumb_2048_url") or meta.get("thumb_1024_url")
+            if meta.get("creator"): best["creator"]=meta["creator"]
+    if not image_url:
+        return False, "Mapillary found nearby imagery but did not return a usable thumbnail."
+
+    img=requests.get(image_url,timeout=45)
+    if not img.ok:
+        return False, f"Mapillary image download failed ({img.status_code})."
+    mime=img.headers.get("Content-Type","image/jpeg").split(";")[0]
+    creator=best.get("creator") or {}
+    if isinstance(creator,dict):
+        username=creator.get("username") or creator.get("name") or ""
+    else:
+        username=str(creator or "")
+    attribution=f"Mapillary image {best['id']}"
+    if username: attribution+=f" by {username}"
+    attribution+=" — CC BY-SA; attribution/share-alike requirements apply. Verify exact house before marketing use."
+    c=db(); cur=c.cursor()
+    cur.execute(
+        "UPDATE properties SET original_image=%s,original_mime=%s,image_source=%s,image_license_ok=%s,status='READY_FOR_MOCKUP' WHERE id=%s",
+        (img.content,mime,attribution,False,pid)
+    )
+    c.commit(); c.close()
+    return True, f"Mapillary photo loaded from {best['_distance']:.0f} m away and camera angle checked. Verify this is the exact front exterior before generating the mockup."
 
 def _extract_photo_urls(obj):
     urls=[]
@@ -268,7 +392,7 @@ def dashboard():
       <div class="card stat">Leads<strong>{{s.leads}}</strong></div>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
-      <h2 style="margin:0">The Sanctuary pilot</h2><a class="btn green" href="/add">+ Add property</a>
+      <h2 style="margin:0">Canopy MLS target list</h2><a class="btn green" href="/add">+ Add property</a>
     </div></div>
     <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th></tr></thead><tbody>
     {% for p in rows %}<tr><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td></tr>{% endfor %}
@@ -378,6 +502,7 @@ def property_detail(pid):
         {% if p.original_image %}<img class=thumb src="/media/{{p.id}}/original">{% else %}<p class=muted>No photo uploaded.</p>{% endif %}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
           <form method=post action="/property/{{p.id}}/fetch-photo"><button class=green>Fetch licensed property photo</button></form>
+          <form method=post action="/property/{{p.id}}/mapillary"><button>Try Mapillary photo</button></form>
           <a class="btn gray" href="/property/{{p.id}}/streetview" target="_blank">Test Street View</a>
         </div>
         <p class=muted>The app automatically tries ATTOM after you add an address. This button retries the licensed-photo lookup.</p>
@@ -415,6 +540,16 @@ def fetch_property_photo(pid):
         flash(msg)
     except Exception as e:
         flash(f"Photo lookup error: {e}")
+    return redirect(url_for("property_detail",pid=pid))
+
+@app.post("/property/<int:pid>/mapillary")
+@auth_required
+def fetch_mapillary_photo(pid):
+    try:
+        ok,msg=fetch_mapillary_photo_for_property(pid)
+        flash(msg)
+    except Exception as e:
+        flash(f"Mapillary lookup error: {e}")
     return redirect(url_for("property_detail",pid=pid))
 
 @app.post("/property/<int:pid>/generate")
