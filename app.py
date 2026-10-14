@@ -525,13 +525,54 @@ def dashboard():
       <div class="card stat">Leads<strong>{{s.leads}}</strong></div>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
-      <h2 style="margin:0">Canopy MLS target list</h2><a class="btn green" href="/add">+ Add property</a>
+      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
     <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th></tr></thead><tbody>
     {% for p in rows %}<tr><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td></tr>{% endfor %}
     </tbody></table></div>
     """
     return page("RS Permanent Lighting",body,s=stats,rows=rows)
+
+@app.get("/photo-queue")
+@auth_required
+def photo_queue():
+    c=db(); cur=c.cursor()
+    cur.execute("""SELECT id,address,city,state,zip,status,image_source
+                   FROM properties
+                   WHERE original_image IS NULL
+                   ORDER BY id""")
+    rows=cur.fetchall(); c.close()
+    body="""
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+        <div><h2 style="margin:0">Needs photo queue</h2><div class=muted>{{rows|length}} properties still need a usable real exterior photo.</div></div>
+        <a class="btn gray" href="/">Back to dashboard</a>
+      </div>
+    </div>
+    <div class="card" style="overflow:auto;padding:0">
+      <table>
+        <thead><tr><th>#</th><th>Property</th><th>Last result</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for p in rows %}
+          <tr>
+            <td>{{p.id}}</td>
+            <td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class=muted>{{p.city}}, {{p.state}} {{p.zip}}</span></td>
+            <td><span class=muted>{{p.image_source or "No source tried yet"}}</span></td>
+            <td>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <form method=post action="/property/{{p.id}}/mapillary"><button>Mapillary</button></form>
+                <form method=post action="/property/{{p.id}}/kartaview"><button>KartaView</button></form>
+                <a class="btn gray" href="/property/{{p.id}}/streetview" target="_blank">Street View verify</a>
+                <a class="btn green" href="/property/{{p.id}}">Manual upload</a>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    """
+    return page("Needs photo queue",body,rows=rows)
 
 @app.route("/add",methods=["GET","POST"])
 @auth_required
