@@ -122,26 +122,60 @@ def streetview_metadata_for_property(p):
         return None, f"Google Street View returned {data.get('status','UNKNOWN')} for this address."
     return data, None
 
-def _attom_match_with_coords(p):
-    if not ATTOM_API_KEY:
-        return None, "ATTOM_API_KEY is not configured."
+def _geocode_property(p):
     full_address=f"{p['address']}, {p['city']}, {p['state']} {p['zip']}"
-    r=requests.get(
-        "https://api.gateway.attomdata.com/propertyapi/v1.0.0/property/id",
-        params={"address":full_address},
-        headers={"apikey":ATTOM_API_KEY,"Accept":"application/json"},
-        timeout=30
-    )
-    if not r.ok:
-        return None, f"ATTOM address match failed ({r.status_code})."
+
+    # 1) ATTOM when coordinates are available.
+    if ATTOM_API_KEY:
+        try:
+            r=requests.get(
+                "https://api.gateway.attomdata.com/propertyapi/v1.0.0/property/id",
+                params={"address":full_address},
+                headers={"apikey":ATTOM_API_KEY,"Accept":"application/json"},
+                timeout=30
+            )
+            if r.ok:
+                prop=(r.json().get("property") or [None])[0] or {}
+                loc=prop.get("location") or {}
+                lat=loc.get("latitude"); lon=loc.get("longitude")
+                if lat not in (None,"") and lon not in (None,""):
+                    return {
+                        "lat":float(lat),"lon":float(lon),
+                        "attom_id":str((prop.get("identifier") or {}).get("attomId") or ""),
+                        "source":"ATTOM"
+                    }, None
+        except Exception:
+            pass
+
+    # 2) U.S. Census Geocoder fallback. No extra API key required.
     try:
-        prop=r.json()["property"][0]
-        loc=prop.get("location") or {}
-        lat=float(loc.get("latitude"))
-        lon=float(loc.get("longitude"))
-        return {"lat":lat,"lon":lon,"attom_id":str((prop.get("identifier") or {}).get("attomId") or "")}, None
+        cr=requests.get(
+            "https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress",
+            params={
+                "address":full_address,
+                "benchmark":"Public_AR_Current",
+                "vintage":"Current_Current",
+                "format":"json"
+            },
+            timeout=30,
+            headers={"User-Agent":"RS-Permanent-Lighting/1.0"}
+        )
+        if cr.ok:
+            matches=((cr.json().get("result") or {}).get("addressMatches") or [])
+            if matches:
+                coords=matches[0].get("coordinates") or {}
+                x=coords.get("x"); y=coords.get("y")
+                if x not in (None,"") and y not in (None,""):
+                    return {
+                        "lat":float(y),"lon":float(x),
+                        "attom_id":"",
+                        "source":"US Census Geocoder",
+                        "matched_address":matches[0].get("matchedAddress","")
+                    }, None
     except Exception:
-        return None, "ATTOM matched the property but did not return usable coordinates."
+        pass
+
+    return None, "Could not geocode this address with ATTOM or the U.S. Census geocoder."
 
 def _haversine_m(lat1,lon1,lat2,lon2):
     r=6371008.8
@@ -166,7 +200,7 @@ def fetch_mapillary_photo_for_property(pid):
     if not MAPILLARY_ACCESS_TOKEN:
         return False, "MAPILLARY_ACCESS_TOKEN is not configured on Render."
 
-    geo,err=_attom_match_with_coords(p)
+    geo,err=_geocode_property(p)
     if err:
         return False, err
     lat,lon=geo["lat"],geo["lon"]
