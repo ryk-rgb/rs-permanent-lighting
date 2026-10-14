@@ -781,13 +781,104 @@ def public_property(token):
     if not p: c.close(); return "Not found",404
     cur.execute("UPDATE properties SET scans=scans+1 WHERE id=%s",(p["id"],)); c.commit(); c.close()
     img_kind="mockup" if p["mockup_image"] is not None else "original"
+    phone_digits="".join(ch for ch in BUSINESS_PHONE if ch.isdigit())
+    estimate=float(p["quote_amount"] or 0)
+    linear_ft=float(p["est_linear_ft"] or 0)
     return render_template_string("""
-<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1"><title>{{biz}}</title>
-<style>body{margin:0;font-family:Arial;background:#f2f6f8;color:#14384c}.hero{background:#075b8d;color:white;padding:28px 20px}.wrap{max-width:850px;margin:auto;padding:18px}.card{background:white;border-radius:16px;padding:18px;margin:15px 0}img{width:100%;border-radius:12px}input,textarea{width:100%;box-sizing:border-box;padding:12px;margin:6px 0 12px;border:1px solid #ced9df;border-radius:8px;font-size:16px}button{background:#96be32;border:0;border-radius:9px;padding:13px 18px;font-size:17px;font-weight:bold;color:#17384a}</style></head>
-<body><div class=hero><div class=wrap><b>{{biz}}</b><h1>See your home in a whole new light.</h1><p>Permanent architectural lighting designed for {{p.address}}.</p></div></div>
-<div class=wrap><div class=card>{% if p.mockup_image or p.original_image %}<img src="/media/{{p.id}}/{{kind}}">{% endif %}<h2>Get pricing for this home</h2>
-<form method=post action="/lead/{{p.token}}"><input name=name placeholder="Name" required><input name=phone placeholder="Phone" required><input type=email name=email placeholder="Email"><textarea name=notes placeholder="Anything we should know?"></textarea><button>Request my estimate</button></form><p>{{phone}}</p></div></div></body></html>
-""",biz=BUSINESS_NAME,p=p,kind=img_kind,phone=BUSINESS_PHONE)
+<!doctype html>
+<html>
+<head>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>{{biz}} | {{p.address}}</title>
+<style>
+:root{--blue:#075b8d;--dark:#073d5b;--green:#96be32;--bg:#f3f7f9;--text:#17384a;--line:#d9e3e8}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.hero{background:linear-gradient(135deg,var(--dark),var(--blue));color:white;padding:18px 18px 34px}
+.wrap{max-width:900px;margin:auto}.brand{font-size:15px;font-weight:800;letter-spacing:.08em}.eyebrow{font-size:13px;opacity:.85;margin-top:26px}
+h1{font-size:clamp(34px,7vw,62px);line-height:.98;margin:8px 0 12px}.green{color:#b7dc50}.hero p{font-size:18px;line-height:1.5;max-width:700px;margin:0}
+.main{max-width:900px;margin:-20px auto 0;padding:0 16px 32px}.card{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;margin:14px 0;box-shadow:0 8px 28px rgba(20,56,76,.08)}
+.house{width:100%;max-height:560px;object-fit:cover;border-radius:14px;background:#e7eef2}.kicker{font-size:13px;text-transform:uppercase;letter-spacing:.08em;font-weight:bold;color:var(--blue)}
+.price{font-size:38px;font-weight:800;color:var(--dark);margin:5px 0}.price small{font-size:15px;font-weight:normal;color:#647985}.subtle{color:#647985;font-size:13px;line-height:1.45}
+.ctas{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-top:14px}.btn,button{display:flex;align-items:center;justify-content:center;text-decoration:none;border:0;border-radius:11px;padding:14px 14px;font-size:16px;font-weight:800;cursor:pointer}
+.primary{background:var(--green);color:#17384a}.secondary{background:var(--blue);color:white}.dark{background:var(--dark);color:white}
+.features{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.feature{padding:13px;border-radius:12px;background:#f4f8fa;font-size:14px;line-height:1.35}.feature b{display:block;margin-bottom:4px}
+.offer{border:2px solid var(--green);background:#f7fbe9}.offer h2{margin:0 0 8px}
+form{margin-top:10px}input,textarea{width:100%;box-sizing:border-box;padding:13px;margin:6px 0 10px;border:1px solid #cbd7dd;border-radius:9px;font-size:16px}textarea{min-height:88px}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sticky{display:none}
+@media(max-width:680px){.ctas{grid-template-columns:1fr 1fr}.ctas .primary{grid-column:1/-1}.features{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}.main{padding-bottom:88px}.sticky{display:grid;grid-template-columns:1fr 1fr;position:fixed;left:0;right:0;bottom:0;z-index:20;background:white;border-top:1px solid #d6e0e5;padding:9px;gap:8px}.sticky .btn{padding:13px 10px}.hero{padding-bottom:38px}}
+</style>
+</head>
+<body>
+<div class=hero><div class=wrap>
+  <div class=brand>{{biz}}</div>
+  <div class=eyebrow>PERSONALIZED DESIGN FOR {{p.address}}</div>
+  <h1>THIS IS <span class=green>YOUR HOME.</span></h1>
+  <p>See what permanent architectural lighting could look like on your property — installed once and ready for every season.</p>
+</div></div>
+
+<main class=main>
+  <div class=card>
+    {% if p.mockup_image or p.original_image %}
+      <img class=house src="/media/{{p.id}}/{{kind}}" alt="Lighting visualization for {{p.address}}">
+    {% else %}
+      <div style="padding:55px 20px;text-align:center;background:#edf2f4;border-radius:14px">Your custom home visualization is being prepared.</div>
+    {% endif %}
+    <div style="padding-top:16px">
+      <div class=kicker>Designed for {{p.address}}</div>
+      {% if estimate > 0 %}
+        <div class=price>{{"$%.0f"|format(estimate)}} <small>preliminary project estimate</small></div>
+        <div class=subtle>Final price is confirmed after an on-site measurement and design review.{% if linear_ft > 0 %} Current estimate is based on approximately {{ "%.0f"|format(linear_ft) }} linear ft.{% endif %}</div>
+      {% else %}
+        <div class=price>Custom pricing <small>for this home</small></div>
+        <div class=subtle>Request a free on-site measurement and we’ll confirm the exact lighting layout and price.</div>
+      {% endif %}
+
+      <div class=ctas>
+        <a class="btn primary" href="#estimate">Book My Free Estimate</a>
+        <a class="btn secondary" href="tel:+1{{phone_digits}}">Call</a>
+        <a class="btn dark" href="sms:+1{{phone_digits}}?body=Hi%20RS%20Permanent%20Lighting%2C%20I%20received%20a%20postcard%20for%20{{p.address|urlencode}}">Text</a>
+      </div>
+    </div>
+  </div>
+
+  <div class=card>
+    <div class=kicker>Why permanent lighting?</div>
+    <h2 style="margin:7px 0 14px">One installation. Endless occasions.</h2>
+    <div class=features>
+      <div class=feature><b>Low-profile installation</b>Designed to blend into the home during the day.</div>
+      <div class=feature><b>App-controlled colors</b>Warm white, holidays, game days and custom scenes.</div>
+      <div class=feature><b>No more ladders</b>Leave seasonal hanging and removal behind.</div>
+    </div>
+  </div>
+
+  <div class="card offer">
+    <h2>See the exact price for your home</h2>
+    <p style="margin:0">Your consultation includes an on-site measurement, lighting layout and exact installation price. Ask about available payment or financing options during your estimate.</p>
+  </div>
+
+  <div class=card id=estimate>
+    <div class=kicker>Free estimate</div>
+    <h2 style="margin:7px 0">Want this look on your home?</h2>
+    <p class=subtle style="font-size:15px">Send us your details and we’ll contact you to confirm the design and exact price for {{p.address}}.</p>
+    <form method=post action="/lead/{{p.token}}">
+      <div class=formgrid>
+        <div><input name=name placeholder="Your name" required></div>
+        <div><input name=phone placeholder="Phone number" required></div>
+      </div>
+      <input type=email name=email placeholder="Email address">
+      <textarea name=notes placeholder="Questions, preferred contact time, or anything we should know?"></textarea>
+      <button class="btn primary" style="width:100%">Book My Free Estimate</button>
+    </form>
+    <p class=subtle style="text-align:center;margin-bottom:0">Or call/text {{phone}}.</p>
+  </div>
+</main>
+
+<div class=sticky>
+  <a class="btn secondary" href="tel:+1{{phone_digits}}">Call Now</a>
+  <a class="btn primary" href="#estimate">Free Estimate</a>
+</div>
+</body></html>
+""",biz=BUSINESS_NAME,p=p,kind=img_kind,phone=BUSINESS_PHONE,phone_digits=phone_digits,estimate=estimate,linear_ft=linear_ft)
 
 @app.post("/lead/<token>")
 def lead(token):
