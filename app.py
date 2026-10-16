@@ -608,8 +608,26 @@ def streetview_preview(pid):
     meta,err=streetview_metadata_for_property(p)
     if err:
         return page("Street View unavailable","<div class=card><h2>Street View</h2><p>{{msg}}</p><a class='btn' href='/property/{{pid}}'>Back</a></div>",msg=err,pid=pid)
+    return page("Street View","""
+    <div class=card>
+      <h2 style="margin-top:0">Google Street View</h2>
+      <img class=thumb src="/property/{{pid}}/streetview-image" alt="Google Street View for {{address}}">
+      <p class=muted>Live Google Street View preview for verification only. It is not stored in the RS Permanent Lighting database.</p>
+      <a class=btn href="/property/{{pid}}">Back to property</a>
+    </div>
+    """,pid=pid,address=p["address"])
+
+@app.get("/property/<int:pid>/streetview-image")
+@auth_required
+def streetview_image(pid):
+    p=get_property(pid)
+    if not p:
+        return "Not found",404
+    meta,err=streetview_metadata_for_property(p)
+    if err:
+        return Response(err,404,mimetype="text/plain")
     location=f"{p['address']}, {p['city']}, {p['state']} {p['zip']}"
-    # Stream the image without storing or caching it.
+    # Stream directly from Google; do not persist or cache the imagery.
     r=requests.get(
         "https://maps.googleapis.com/maps/api/streetview",
         params={
@@ -624,8 +642,12 @@ def streetview_preview(pid):
         timeout=30
     )
     if not r.ok:
-        return page("Street View unavailable","<div class=card><h2>Street View</h2><p>Google returned {{code}}.</p><a class='btn' href='/property/{{pid}}'>Back</a></div>",code=r.status_code,pid=pid)
-    return Response(r.content,mimetype=r.headers.get("Content-Type","image/jpeg"),headers={"Cache-Control":"no-store"})
+        return Response(f"Google Street View returned {r.status_code}.",r.status_code,mimetype="text/plain")
+    return Response(
+        r.content,
+        mimetype=r.headers.get("Content-Type","image/jpeg"),
+        headers={"Cache-Control":"no-store, max-age=0","Pragma":"no-cache"}
+    )
 
 @app.get("/media/<int:pid>/<kind>")
 def media(pid,kind):
@@ -674,11 +696,19 @@ def property_detail(pid):
     <div class=two>
       <div class=card><h3>1. Real house photo</h3>
         {% if p.original_image %}<img class=thumb src="/media/{{p.id}}/original">{% else %}<p class=muted>No photo uploaded.</p>{% endif %}
+        <div style="margin:12px 0;padding:12px;border:1px solid #d9e3e8;border-radius:10px;background:#f8fafb">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <b>Live Google Street View verification</b>
+            <a class="btn gray" href="/property/{{p.id}}/streetview" target="_blank">Open larger</a>
+          </div>
+          <img class=thumb src="/property/{{p.id}}/streetview-image" alt="Google Street View preview for {{p.address}}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <div class=muted style="display:none;padding:10px 0">Street View is unavailable or the Google API key is not authorized for this address.</div>
+          <p class=muted style="margin-bottom:0">Live preview only for checking the exact house. The image is not stored in our database.</p>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
           <form method=post action="/property/{{p.id}}/fetch-photo"><button class=green>Fetch licensed property photo</button></form>
           <form method=post action="/property/{{p.id}}/mapillary"><button>Try Mapillary photo</button></form>
           <form method=post action="/property/{{p.id}}/kartaview"><button>Try KartaView photo</button></form>
-          <a class="btn gray" href="/property/{{p.id}}/streetview" target="_blank">Test Street View</a>
         </div>
         <p class=muted>The app automatically tries ATTOM after you add an address. This button retries the licensed-photo lookup.</p>
         <form method=post enctype=multipart/form-data><input type=hidden name=action value=upload_original><input type=file name=image accept="image/*" required><button>Upload real photo manually</button></form>
