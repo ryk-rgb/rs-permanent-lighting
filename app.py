@@ -18,6 +18,9 @@ OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 GHL_WEBHOOK_URL = os.environ.get("GHL_WEBHOOK_URL", "")
 BUSINESS_NAME = os.environ.get("BUSINESS_NAME", "RS Permanent Lighting")
 BUSINESS_PHONE = os.environ.get("BUSINESS_PHONE", "704-621-6399")
+LIGHTING_PRICE_PER_FT = float(os.environ.get("LIGHTING_PRICE_PER_FT", "29"))
+LIGHTING_MINIMUM_PRICE = float(os.environ.get("LIGHTING_MINIMUM_PRICE", "2500"))
+LIGHTING_ESTIMATE_BUFFER_PCT = float(os.environ.get("LIGHTING_ESTIMATE_BUFFER_PCT", "10"))
 BUSINESS_WEBSITE = os.environ.get("BUSINESS_WEBSITE", "")
 ATTOM_API_KEY = os.environ.get("ATTOM_API_KEY", "")
 ATTOM_SLIPSTREAM_URL = os.environ.get("ATTOM_SLIPSTREAM_URL", "").strip()
@@ -679,9 +682,17 @@ def property_detail(pid):
                 else:
                     cur.execute("UPDATE properties SET mockup_image=%s,mockup_mime=%s,status='REVIEW' WHERE id=%s",(data,f.mimetype,pid))
             elif action=="save":
+                linear_ft=float(request.form.get("est_linear_ft") or 0)
+                quote_raw=(request.form.get("quote_amount") or "").strip()
+                if quote_raw:
+                    quote_amount=float(quote_raw)
+                elif linear_ft > 0:
+                    quote_amount=max(LIGHTING_MINIMUM_PRICE, linear_ft * LIGHTING_PRICE_PER_FT)
+                else:
+                    quote_amount=0
                 cur.execute("""UPDATE properties SET status=%s,image_source=%s,image_license_ok=%s,est_linear_ft=%s,quote_amount=%s,mailed=%s WHERE id=%s""",
                     (request.form.get("status","PHOTO_NEEDED"),request.form.get("image_source",""),bool(request.form.get("image_license_ok")),
-                     request.form.get("est_linear_ft") or 0,request.form.get("quote_amount") or 0,bool(request.form.get("mailed")),pid))
+                     linear_ft,quote_amount,bool(request.form.get("mailed")),pid))
             c.commit()
             flash("Saved.")
         except Exception as e:
@@ -725,7 +736,9 @@ def property_detail(pid):
         <label>Image source / permission note</label><input name=image_source value="{{p.image_source}}">
         <label><input type=checkbox name=image_license_ok style="width:auto" {% if p.image_license_ok %}checked{% endif %}> I have permission/licensing for this marketing image</label><br><br>
         <label>Estimated linear feet</label><input type=number step=.1 min=0 name=est_linear_ft value="{{p.est_linear_ft}}">
-        <label>Quote amount ($)</label><input type=number step=1 min=0 name=quote_amount value="{{p.quote_amount}}">
+        <div class=muted style="margin:-6px 0 10px">Auto pricing: ${{"%.0f"|format(price_per_ft)}}/ft with a ${{"%.0f"|format(minimum_price)}} minimum.</div>
+        <label>Quote amount override ($)</label><input type=number step=1 min=0 name=quote_amount value="{{p.quote_amount}}" placeholder="Leave blank to calculate automatically">
+        <div class=muted style="margin:-6px 0 10px">Leave blank to calculate from the linear-foot estimate. Enter a value only to override the formula.</div>
         <label><input type=checkbox name=mailed style="width:auto" {% if p.mailed %}checked{% endif %}> Mark postcard mailed</label><br><br>
         <button class=green>Save</button></form></div>
       <div class=card><h3>4. QR + postcard</h3>
@@ -734,7 +747,7 @@ def property_detail(pid):
       </div>
     </div>
     """
-    return page(p["address"],body,p=p,public_url=public_url)
+    return page(p["address"],body,p=p,public_url=public_url,price_per_ft=LIGHTING_PRICE_PER_FT,minimum_price=LIGHTING_MINIMUM_PRICE)
 
 
 @app.post("/property/<int:pid>/fetch-photo")
@@ -814,6 +827,11 @@ def public_property(token):
     phone_digits="".join(ch for ch in BUSINESS_PHONE if ch.isdigit())
     estimate=float(p["quote_amount"] or 0)
     linear_ft=float(p["est_linear_ft"] or 0)
+    if estimate <= 0 and linear_ft > 0:
+        estimate=max(LIGHTING_MINIMUM_PRICE, linear_ft * LIGHTING_PRICE_PER_FT)
+    buffer=max(0, LIGHTING_ESTIMATE_BUFFER_PCT) / 100.0
+    estimate_low=max(LIGHTING_MINIMUM_PRICE, estimate * (1-buffer)) if estimate > 0 else 0
+    estimate_high=estimate * (1+buffer) if estimate > 0 else 0
     return render_template_string("""
 <!doctype html>
 <html>
@@ -856,10 +874,10 @@ form{margin-top:10px}input,textarea{width:100%;box-sizing:border-box;padding:13p
     <div style="padding-top:16px">
       <div class=kicker>Designed for {{p.address}}</div>
       {% if estimate > 0 %}
-        <div class=price>{{"$%.0f"|format(estimate)}} <small>preliminary project estimate</small></div>
-        <div class=subtle>Final price is confirmed after an on-site measurement and design review.{% if linear_ft > 0 %} Current estimate is based on approximately {{ "%.0f"|format(linear_ft) }} linear ft.{% endif %}</div>
+        <div class=price>{{"$%.0f"|format(estimate_low)}}–{{"$%.0f"|format(estimate_high)}} <small>preliminary range</small></div>
+        <div class=subtle>Based on the visible roofline and current design concept.{% if linear_ft > 0 %} Current estimate uses approximately {{ "%.0f"|format(linear_ft) }} linear ft.{% endif %} Final price is confirmed after an on-site measurement and installation review.</div>
       {% else %}
-        <div class=price>Custom pricing <small>for this home</small></div>
+        <div class=price>Free custom estimate <small>for this home</small></div>
         <div class=subtle>Request a free on-site measurement and we’ll confirm the exact lighting layout and price.</div>
       {% endif %}
 
@@ -908,7 +926,7 @@ form{margin-top:10px}input,textarea{width:100%;box-sizing:border-box;padding:13p
   <a class="btn primary" href="#estimate">Free Estimate</a>
 </div>
 </body></html>
-""",biz=BUSINESS_NAME,p=p,kind=img_kind,phone=BUSINESS_PHONE,phone_digits=phone_digits,estimate=estimate,linear_ft=linear_ft)
+""",biz=BUSINESS_NAME,p=p,kind=img_kind,phone=BUSINESS_PHONE,phone_digits=phone_digits,estimate=estimate,estimate_low=estimate_low,estimate_high=estimate_high,linear_ft=linear_ft)
 
 @app.post("/lead/<token>")
 def lead(token):
