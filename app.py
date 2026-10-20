@@ -929,13 +929,79 @@ def postcard(pid):
     if not p:return "Not found",404
     img_kind="mockup" if p["mockup_image"] is not None else "original"
     return render_template_string("""
-<!doctype html><html><head><meta charset=utf-8><title>Postcard</title><style>
-@page{size:9in 6in;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial}.page{width:9in;height:6in;position:relative;overflow:hidden;page-break-after:always}.front{background:#073d5b;color:white}.photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,40,63,.88),rgba(0,0,0,.05) 62%,rgba(0,0,0,.35))}.brand{position:absolute;left:.35in;top:.32in;font-size:.22in;font-weight:bold}.headline{position:absolute;left:.35in;top:1.25in;font-size:.57in;font-weight:bold;line-height:.98;text-shadow:0 2px 4px #000}.headline span{color:#a3cc39}.sub{position:absolute;left:.38in;top:3.05in;font-size:.23in;line-height:1.45}.qrbox{position:absolute;right:.35in;bottom:.35in;background:white;color:#073d5b;border:4px solid #96be32;border-radius:14px;padding:.12in;width:2.55in;display:flex;gap:.12in;align-items:center}.qrbox img{width:1in;height:1in}.back{background:white;color:#073d5b;padding:.42in}.cols{display:grid;grid-template-columns:1.1fr .9fr;gap:.35in}.back h2{font-size:.42in;margin:.05in 0}.green{color:#88ae2c}ul{font-size:.2in;line-height:1.6}.mail{border:2px solid #dbe4e8;border-radius:12px;padding:.25in;margin-top:.25in;font-size:.2in}@media print{button{display:none}}</style></head>
+<!doctype html>
+<html>
+<head>
+<meta charset=utf-8>
+<title>RS Permanent Lighting Postcard</title>
+<style>
+@page{size:9in 6in;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#111}
+.page{width:9in;height:6in;position:relative;overflow:hidden;background:#073d5b;color:white}
+.photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.shade{
+  position:absolute;inset:0;
+  background:
+    linear-gradient(90deg,rgba(0,34,54,.92) 0%,rgba(0,34,54,.74) 31%,rgba(0,0,0,.12) 58%,rgba(0,0,0,.36) 100%),
+    linear-gradient(0deg,rgba(0,0,0,.38),rgba(0,0,0,0) 46%)
+}
+.brand{position:absolute;left:.38in;top:.30in;font-size:.19in;font-weight:800;letter-spacing:.02in}
+.headline{position:absolute;left:.38in;top:1.00in;font-size:.56in;font-weight:900;line-height:.98;text-shadow:0 2px 5px rgba(0,0,0,.65)}
+.headline span{color:#9acb3b}
+.sub{position:absolute;left:.40in;top:2.35in;width:3.15in;font-size:.22in;font-weight:600;line-height:1.28;text-shadow:0 2px 4px rgba(0,0,0,.8)}
+.benefit{position:absolute;left:.40in;top:3.18in;width:3.6in;font-size:.145in;line-height:1.35;color:#f4f7f8;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.qrbox{
+  position:absolute;right:.34in;bottom:.34in;width:2.75in;
+  background:rgba(255,255,255,.97);color:#073d5b;border:4px solid #9acb3b;border-radius:14px;
+  padding:.12in;display:flex;gap:.12in;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.3)
+}
+.qrbox img{width:1.08in;height:1.08in;flex:0 0 auto}
+.qrtext{font-size:.13in;line-height:1.2}
+.qrtext b{font-size:.17in;display:block;margin-bottom:.03in}
+.contact{
+  position:absolute;left:.40in;bottom:.38in;font-size:.15in;font-weight:700;
+  text-shadow:0 2px 4px rgba(0,0,0,.8)
+}
+.address{
+  position:absolute;left:.40in;bottom:.72in;font-size:.13in;color:#eef3f5;
+  text-shadow:0 2px 4px rgba(0,0,0,.8)
+}
+@media print{body{background:white}}
+</style>
+</head>
 <body>
-<section class="page front">{% if p.mockup_image or p.original_image %}<img class=photo src="/media/{{p.id}}/{{kind}}">{% endif %}<div class=shade></div><div class=brand>RS PERMANENT LIGHTING</div><div class=headline>YES — THAT'S<br><span>YOUR</span> HOUSE.</div><div class=sub>Permanent lighting.<br>Installed once.<br>Ready for every season.</div><div class=qrbox><img src="/qr/{{p.token}}.png"><div><b>LOVE THE LOOK?</b><br>Scan for pricing<br><small>{{p.address}}</small></div></div></section>
-<section class="page back"><div class=cols><div><h2>ONE INSTALLATION.<br><span class=green>ENDLESS OCCASIONS.</span></h2><ul><li>Custom design for your home</li><li>Low-profile permanent LED lighting</li><li>Control colors from your phone</li><li>Christmas, game day, Halloween & warm white</li><li>No more ladders or tangled lights</li></ul><p><b>We already designed this for your home.</b></p></div><div><h3>RS PERMANENT LIGHTING</h3><p>{{phone}}<br>{{website}}</p><div class=mail>LOCAL HOMEOWNER<br><br>{{p.address}}<br>{{p.city}}, {{p.state}} {{p.zip}}</div></div></div></section>
-<script>setTimeout(()=>window.print(),600)</script></body></html>
-""",p=p,kind=img_kind,phone=BUSINESS_PHONE,website=BUSINESS_WEBSITE)
+<section class="page">
+  {% if p.mockup_image or p.original_image %}
+    <img class="photo" src="/media/{{p.id}}/{{kind}}">
+  {% endif %}
+  <div class="shade"></div>
+
+  <div class="brand">RS PERMANENT LIGHTING</div>
+
+  <div class="headline">YES — THAT'S<br><span>YOUR</span> HOUSE.</div>
+
+  <div class="sub">See what permanent lighting could look like on your home.</div>
+
+  <div class="benefit">Elegant year-round lighting for holidays, game days, special occasions, and everyday curb appeal.</div>
+
+  <div class="address">{{p.address}}</div>
+
+  <div class="contact">Call or Text {{phone}}</div>
+
+  <div class="qrbox">
+    <img src="/qr/{{p.token}}.png" alt="Property QR code">
+    <div class="qrtext">
+      <b>SCAN TO VIEW YOUR DESIGN</b>
+      Request your personalized estimate
+    </div>
+  </div>
+</section>
+<script>setTimeout(()=>window.print(),600)</script>
+</body>
+</html>
+""",p=p,kind=img_kind,phone=BUSINESS_PHONE)
+
 
 with app.app_context():
     try:
