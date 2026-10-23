@@ -99,7 +99,7 @@ def init_db():
     );
     """)
     cur.execute("SELECT COUNT(*) AS n FROM properties")
-    if cur.fetchone()["n"] == 0:
+    if cur.fetchone()["n"] == 0 and os.environ.get("SEED_DEFAULT_PROPERTIES","").lower() in ("1","true","yes"):
         for p in TARGET_PROPERTIES:
             cur.execute(
                 "INSERT INTO properties(address,city,state,zip,token) VALUES(%s,%s,%s,%s,%s)",
