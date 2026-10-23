@@ -528,7 +528,7 @@ def dashboard():
       <div class="card stat">Leads<strong>{{s.leads}}</strong></div>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
-      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn green" href="/add">+ Add property</a></div>
+      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
     <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th></tr></thead><tbody>
     {% for p in rows %}<tr><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td></tr>{% endfor %}
@@ -576,6 +576,95 @@ def photo_queue():
     </div>
     """
     return page("Needs photo queue",body,rows=rows)
+
+@app.route("/import-csv",methods=["GET","POST"])
+@auth_required
+def import_csv():
+    if request.method=="POST":
+        f=request.files.get("csv_file")
+        if not f or not f.filename:
+            flash("Choose a CSV file first.")
+            return redirect(url_for("import_csv"))
+        try:
+            raw=f.read().decode("utf-8-sig")
+            reader=csv.DictReader(io.StringIO(raw))
+            fields=[(x or "").strip().lower() for x in (reader.fieldnames or [])]
+            if "address" not in fields or "photo_url" not in fields:
+                raise ValueError("CSV must contain address and photo_url columns.")
+
+            imported=0
+            updated=0
+            failed=0
+            conn=db()
+            cur=conn.cursor()
+            try:
+                for row in reader:
+                    full=(row.get("address") or "").strip()
+                    photo_url=(row.get("photo_url") or "").strip()
+                    if not full or not photo_url:
+                        failed += 1
+                        continue
+
+                    parts=[x.strip() for x in full.split(",")]
+                    if len(parts) < 3:
+                        failed += 1
+                        continue
+                    street=parts[0]
+                    city=parts[-2]
+                    state_zip=parts[-1].split()
+                    if len(state_zip) < 2:
+                        failed += 1
+                        continue
+                    state=state_zip[0]
+                    zip_code=state_zip[1][:5]
+
+                    try:
+                        r=requests.get(photo_url,timeout=30,headers={"User-Agent":"Mozilla/5.0"})
+                        if not r.ok or not r.content or len(r.content)>15*1024*1024:
+                            failed += 1
+                            continue
+                        mime=(r.headers.get("Content-Type") or "image/jpeg").split(";")[0]
+                        cur.execute("SELECT id FROM properties WHERE LOWER(address)=LOWER(%s) AND zip=%s LIMIT 1",(street,zip_code))
+                        existing=cur.fetchone()
+                        source_note="Imported from approved address/photo CSV; marketing use permission confirmed by RS Permanent Lighting."
+                        if existing:
+                            cur.execute("""UPDATE properties SET city=%s,state=%s,original_image=%s,original_mime=%s,image_source=%s,image_license_ok=%s,status='READY_FOR_MOCKUP' WHERE id=%s""",
+                                (city,state,r.content,mime,source_note,True,existing["id"]))
+                            updated += 1
+                        else:
+                            cur.execute("""INSERT INTO properties(address,city,state,zip,token,original_image,original_mime,image_source,image_license_ok,status)
+                                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,'READY_FOR_MOCKUP')""",
+                                (street,city,state,zip_code,secrets.token_urlsafe(10),r.content,mime,source_note,True))
+                            imported += 1
+                    except Exception:
+                        failed += 1
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+
+            flash(f"CSV import complete: {imported} new, {updated} updated, {failed} failed.")
+            return redirect(url_for("dashboard"))
+        except Exception as e:
+            flash(f"CSV import error: {e}")
+            return redirect(url_for("import_csv"))
+
+    body="""
+    <div class=card>
+      <h2 style="margin-top:0">Import address + photos CSV</h2>
+      <p>Upload a CSV containing <b>address</b> and <b>photo_url</b>.</p>
+      <p class=muted>Example: 9817 Emerald Point Dr #8, Charlotte, NC 28278</p>
+      <form method=post enctype=multipart/form-data>
+        <input type=file name=csv_file accept=".csv,text/csv" required>
+        <button class=green style="margin-top:10px">Import properties + photos</button>
+      </form>
+      <p class=muted style="margin-top:14px">Matching properties are updated instead of duplicated. Imported photos are marked approved based on your confirmation that you have permission to use them.</p>
+    </div>
+    """
+    return page("Import CSV",body)
+
 
 @app.route("/add",methods=["GET","POST"])
 @auth_required
