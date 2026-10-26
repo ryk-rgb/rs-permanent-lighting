@@ -878,9 +878,14 @@ def generate_mockup(pid):
         flash("Upload the real house photo first."); return redirect(url_for("property_detail",pid=pid))
     if not OPENAI_API_KEY:
         flash("OPENAI_API_KEY is not configured on Render."); return redirect(url_for("property_detail",pid=pid))
-    prompt=("Edit this exact property photo. Preserve the house architecture, roof geometry, windows, driveway, landscaping and camera viewpoint. "
-            "Turn the scene into realistic dusk and add professionally installed permanent warm-white LED lighting neatly following the visible roof eaves and gable lines. "
-            "Do not redesign the house, add rooms, change roof shapes, or replace landscaping. The result must clearly remain the exact same property.")
+    prompt=("Create a photorealistic exterior lighting mockup for this exact house using premium warm white permanent roofline lighting. "
+            "Preserve the exact house, roof shape, trim, windows, garage doors, siding, driveway, landscaping, and camera angle. Do not change the structure or design of the home. "
+            "Install evenly spaced warm white permanent lights along the visible front rooflines, eaves, and gables only where appropriate. "
+            "The lighting should look professionally installed and integrated into the fascia, with a soft elegant downward glow that gently washes the facade. "
+            "Set the scene at dusk or early evening while keeping the original property clearly recognizable. "
+            "The finished result should look high-end, tasteful, subtle, realistic, and believable. "
+            "Do not use multicolor lights. Do not add holiday decorations, people, vehicles, extra fixtures, or architectural elements. "
+            "Do not over-brighten the house, create a cartoon or fake rendering, alter the landscaping, change the camera angle, or dramatically change the sky.")
     files={"image":("house.jpg",bytes(p["original_image"]),p["original_mime"] or "image/jpeg")}
     data={"model":OPENAI_IMAGE_MODEL,"prompt":prompt,"size":"1536x1024"}
     try:
