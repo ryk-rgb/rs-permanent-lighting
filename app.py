@@ -1143,11 +1143,11 @@ def postcard(pid):
 <meta charset=utf-8>
 <title>RS Permanent Lighting Postcard</title>
 <style>
-@page{size:5.5in 4.25in;margin:0}
+@page{size:4.25in 5.5in;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-family:Arial,Helvetica,sans-serif;background:#111}
-.page{width:5.5in!important;height:4.25in!important;position:relative;overflow:hidden;background:#073d5b;color:white;page-break-after:avoid}
-.photo{position:absolute;inset:0;width:5.5in!important;height:4.25in!important;object-fit:cover;display:block}
+html,body{margin:0!important;padding:0!important;width:4.25in;height:5.5in;font-family:Arial,Helvetica,sans-serif;background:#111}
+.page{width:4.25in!important;height:5.5in!important;position:relative;overflow:hidden;background:#073d5b;color:white;page-break-after:avoid}
+.photo{position:absolute;inset:0;width:4.25in!important;height:5.5in!important;object-fit:cover;display:block}
 .shade{
   position:absolute;inset:0;
   background:
@@ -1155,12 +1155,12 @@ html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-
     linear-gradient(0deg,rgba(0,0,0,.18),rgba(0,0,0,0) 42%)
 }
 .brand{position:absolute;left:.22in;top:.18in;font-size:.13in;font-weight:800;letter-spacing:.01in}
-.headline{position:absolute;left:.22in;top:.62in;font-size:.36in;font-weight:900;line-height:.98;text-shadow:0 2px 5px rgba(0,0,0,.65)}
+.headline{position:absolute;left:.22in;top:.72in;font-size:.34in;font-weight:900;line-height:.98;text-shadow:0 2px 5px rgba(0,0,0,.65)}
 .headline span{color:#9acb3b}
-.sub{position:absolute;left:.23in;top:1.56in;width:2.15in;font-size:.14in;font-weight:600;line-height:1.25;text-shadow:0 2px 4px rgba(0,0,0,.8)}
-.benefit{position:absolute;left:.23in;top:2.20in;width:2.35in;font-size:.095in;line-height:1.3;color:#f4f7f8;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.sub{position:absolute;left:.23in;top:1.62in;width:2.55in;font-size:.13in;font-weight:600;line-height:1.25;text-shadow:0 2px 4px rgba(0,0,0,.8)}
+.benefit{position:absolute;left:.23in;top:2.20in;width:2.65in;font-size:.09in;line-height:1.3;color:#f4f7f8;text-shadow:0 1px 3px rgba(0,0,0,.8)}
 .qrbox{
-  position:absolute;right:.18in;bottom:.18in;width:1.9in;
+  position:absolute;right:.16in;bottom:.18in;width:1.75in;
   background:rgba(255,255,255,.97);color:#073d5b;border:4px solid #9acb3b;border-radius:14px;
   padding:.08in;display:flex;gap:.08in;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.3)
 }
@@ -1178,9 +1178,9 @@ html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-
   color:#000;text-shadow:none;box-shadow:0 2px 8px rgba(0,0,0,.18)
 }
 @media print{
-  html,body{width:5.5in!important;height:4.25in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
-  .page{width:5.5in!important;height:4.25in!important;margin:0!important;page-break-inside:avoid!important}
-  .photo{width:5.5in!important;height:4.25in!important;display:block!important}
+  html,body{width:4.25in!important;height:5.5in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
+  .page{width:4.25in!important;height:5.5in!important;margin:0!important;page-break-inside:avoid!important}
+  .photo{width:4.25in!important;height:5.5in!important;display:block!important}
 }
 </style>
 </head>
