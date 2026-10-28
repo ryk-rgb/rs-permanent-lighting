@@ -529,7 +529,7 @@ def dashboard():
       <a class="card stat" href="/leads" style="text-decoration:none;color:inherit">Leads<strong>{{s.leads}}</strong></a>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
-      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
+      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn green" id="bulkMockupBtn" type="button" onclick="generateAllMockups()">Generate All Mockups</button><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
     <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>Print</th><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
     {% for p in rows %}<tr><td><input type="checkbox" class="print-pick" value="{{p.id}}" style="width:18px;height:18px"></td><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
@@ -539,6 +539,34 @@ def dashboard():
       const ids=[...document.querySelectorAll('.print-pick:checked')].map(x=>x.value);
       if(ids.length!==2){alert('Select exactly two properties to print.');return;}
       window.open('/postcard/'+ids[0]+'?second='+ids[1], '_blank');
+    }
+
+    async function generateAllMockups(){
+      const ids=[{% for p in rows %}{% if p.has_original and not p.has_mockup %}{{p.id}},{% endif %}{% endfor %}];
+      if(!ids.length){alert('All properties with photos already have mockups.');return;}
+      if(!confirm('Generate '+ids.length+' missing AI mockups now? Keep this page open until it finishes.')) return;
+
+      const btn=document.getElementById('bulkMockupBtn');
+      btn.disabled=true;
+      let done=0, failed=0;
+
+      for(const id of ids){
+        btn.textContent='Generating '+(done+failed+1)+' of '+ids.length+'…';
+        try{
+          const r=await fetch('/property/'+id+'/generate',{
+            method:'POST',
+            credentials:'same-origin',
+            headers:{'X-Bulk-Generate':'1'}
+          });
+          if(r.ok) done++; else failed++;
+        }catch(e){
+          failed++;
+        }
+      }
+
+      btn.textContent='Finished: '+done+' generated'+(failed ? ', '+failed+' failed' : '');
+      alert('Bulk mockups finished. Generated: '+done+(failed ? '. Failed: '+failed+'.' : '.'));
+      location.reload();
     }
     </script>
     """
@@ -977,9 +1005,13 @@ def fetch_kartaview_photo(pid):
 def generate_mockup(pid):
     p=get_property(pid)
     if not p or p["original_image"] is None:
-        flash("Upload the real house photo first."); return redirect(url_for("property_detail",pid=pid))
+        flash("Upload the real house photo first.")
+        if request.headers.get("X-Bulk-Generate"): return "Missing source photo",400
+        return redirect(url_for("property_detail",pid=pid))
     if not OPENAI_API_KEY:
-        flash("OPENAI_API_KEY is not configured on Render."); return redirect(url_for("property_detail",pid=pid))
+        flash("OPENAI_API_KEY is not configured on Render.")
+        if request.headers.get("X-Bulk-Generate"): return "OpenAI API key missing",500
+        return redirect(url_for("property_detail",pid=pid))
     prompt=("Create a photorealistic exterior lighting mockup for this exact house using premium warm white permanent roofline lighting. "
             "Preserve the exact house, roof shape, trim, windows, garage doors, siding, driveway, landscaping, and camera angle. Do not change the structure or design of the home. "
             "Install evenly spaced warm white permanent lights along the visible front rooflines, eaves, and gables only where appropriate. "
@@ -1002,8 +1034,10 @@ def generate_mockup(pid):
             raise RuntimeError("No image returned.")
         c=db(); cur=c.cursor(); cur.execute("UPDATE properties SET mockup_image=%s,mockup_mime='image/png',status='REVIEW' WHERE id=%s",(img,pid)); c.commit(); c.close()
         flash("AI mockup generated. Check the architecture carefully before approving.")
+        if request.headers.get("X-Bulk-Generate"): return "OK",200
     except Exception as e:
         flash(str(e))
+        if request.headers.get("X-Bulk-Generate"): return str(e),500
     return redirect(url_for("property_detail",pid=pid))
 
 @app.get("/qr/<token>.png")
