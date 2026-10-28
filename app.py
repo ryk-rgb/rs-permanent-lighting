@@ -87,6 +87,8 @@ def init_db():
       mailed BOOLEAN NOT NULL DEFAULT FALSE,
       est_linear_ft NUMERIC NOT NULL DEFAULT 0,
       quote_amount NUMERIC NOT NULL DEFAULT 0,
+      photo_verify_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
+      photo_verify_note TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS leads(
@@ -99,6 +101,11 @@ def init_db():
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
     """)
+    try:
+        cur.execute("ALTER TABLE properties ADD COLUMN IF NOT EXISTS photo_verify_status TEXT NOT NULL DEFAULT 'UNVERIFIED'")
+        cur.execute("ALTER TABLE properties ADD COLUMN IF NOT EXISTS photo_verify_note TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
     cur.execute("SELECT COUNT(*) AS n FROM properties")
     if cur.fetchone()["n"] == 0 and os.environ.get("SEED_DEFAULT_PROPERTIES","").lower() in ("1","true","yes"):
         for p in TARGET_PROPERTIES:
@@ -509,7 +516,7 @@ def health():
 @auth_required
 def dashboard():
     c=db(); cur=c.cursor()
-    cur.execute("SELECT id,address,city,state,zip,status,scans,mailed,quote_amount,(original_image IS NOT NULL) AS has_original,(mockup_image IS NOT NULL) AS has_mockup FROM properties WHERE id >= %s ORDER BY id",(ACTIVE_MIN_PROPERTY_ID,))
+    cur.execute("SELECT id,address,city,state,zip,status,scans,mailed,quote_amount,photo_verify_status,(original_image IS NOT NULL) AS has_original,(mockup_image IS NOT NULL) AS has_mockup FROM properties WHERE id >= %s ORDER BY id",(ACTIVE_MIN_PROPERTY_ID,))
     rows=cur.fetchall()
     cur.execute("SELECT COUNT(*) n FROM leads"); leads=cur.fetchone()["n"]
     c.close()
@@ -531,8 +538,8 @@ def dashboard():
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
       <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn green" id="bulkMockupBtn" type="button" onclick="generateAllMockups()">Generate All Mockups</button><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
-    <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>Print</th><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
-    {% for p in rows %}<tr><td><input type="checkbox" class="print-pick" value="{{p.id}}" style="width:18px;height:18px"></td><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
+    <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>Print</th><th>#</th><th>Address</th><th>Photo</th><th>Photo Verify</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
+    {% for p in rows %}<tr><td><input type="checkbox" class="print-pick" value="{{p.id}}" style="width:18px;height:18px"></td><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{% if p.has_original %}<a href="/property/{{p.id}}/verify-photo"><b>{{p.photo_verify_status}}</b></a>{% else %}—{% endif %}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
     </tbody></table></div>
     <script>
     function printTwoSelected(){
@@ -542,8 +549,8 @@ def dashboard():
     }
 
     async function generateAllMockups(){
-      const ids=[{% for p in rows %}{% if p.has_original and not p.has_mockup %}{{p.id}},{% endif %}{% endfor %}];
-      if(!ids.length){alert('All properties with photos already have mockups.');return;}
+      const ids=[{% for p in rows %}{% if p.has_original and not p.has_mockup and p.photo_verify_status=="VERIFIED" %}{{p.id}},{% endif %}{% endfor %}];
+      if(!ids.length){alert('No VERIFIED properties are waiting for mockups. Verify the house photos first.');return;}
       if(!confirm('Generate '+ids.length+' missing AI mockups now? Keep this page open until it finishes.')) return;
 
       const btn=document.getElementById('bulkMockupBtn');
@@ -821,6 +828,54 @@ def add_property():
     <div class=two><div><label>ZIP</label><input name=zip value=28278></div><div><label>Owner name (optional)</label><input name=owner_name></div></div>
     <button class=green>Add property</button></form></div>""")
 
+
+
+@app.route("/property/<int:pid>/verify-photo",methods=["GET","POST"])
+@auth_required
+def verify_photo(pid):
+    p=get_property(pid)
+    if not p:return "Not found",404
+    if request.method=="POST":
+        status=(request.form.get("verify_status") or "UNVERIFIED").upper()
+        if status not in ("VERIFIED","NEEDS_REVIEW","WRONG_PHOTO","UNVERIFIED"):
+            status="UNVERIFIED"
+        note=(request.form.get("verify_note") or "").strip()
+        c=db(); cur=c.cursor()
+        cur.execute("UPDATE properties SET photo_verify_status=%s,photo_verify_note=%s WHERE id=%s",(status,note,pid))
+        c.commit(); c.close()
+        flash("Photo verification saved.")
+        return redirect(url_for("dashboard"))
+    body="""
+    <div class=card>
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <div><h2 style="margin:0">Verify front-house photo</h2><div class=muted>{{p.address}}, {{p.city}}, {{p.state}} {{p.zip}}</div></div>
+        <a class="btn gray" href="/">Back</a>
+      </div>
+    </div>
+    <div class=two>
+      <div class=card>
+        <h3>Imported photo</h3>
+        {% if p.original_image %}<img class=thumb src="/media/{{p.id}}/original">{% else %}<p>No stored photo.</p>{% endif %}
+      </div>
+      <div class=card>
+        <h3>Live Street View reference</h3>
+        <img class=thumb src="/property/{{p.id}}/streetview-image" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <p class=muted style="display:none">Street View is unavailable for this address. Review the imported photo manually.</p>
+      </div>
+    </div>
+    <div class=card>
+      <form method=post>
+        <label>Verification note (optional)</label>
+        <input name=verify_note value="{{p.photo_verify_note or ''}}" placeholder="Example: roofline, garage and windows match Street View">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class=green name=verify_status value=VERIFIED>✓ Verified Front</button>
+          <button name=verify_status value=NEEDS_REVIEW>⚠ Needs Review</button>
+          <button name=verify_status value=WRONG_PHOTO style="background:#b42318;color:#fff">✕ Wrong Photo</button>
+        </div>
+      </form>
+    </div>
+    """
+    return page("Verify Photo",body,p=p)
 
 @app.get("/property/<int:pid>/streetview")
 @auth_required
