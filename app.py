@@ -1174,8 +1174,8 @@ html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-
 .address{
   position:absolute;right:.18in;top:.16in;max-width:2.35in;
   font-size:.085in;font-weight:700;line-height:1.2;color:white;text-align:right;
-  background:rgba(0,34,54,.48);padding:.06in .08in;border-radius:7px;
-  text-shadow:0 1px 3px rgba(0,0,0,.7)
+  background:#fff;padding:.07in .09in;border-radius:7px;
+  color:#073d5b;text-shadow:none;box-shadow:0 2px 8px rgba(0,0,0,.18)
 }
 @media print{
   html,body{width:5.5in!important;height:4.25in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
