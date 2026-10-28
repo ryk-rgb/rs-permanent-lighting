@@ -1151,8 +1151,8 @@ html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-
 .shade{
   position:absolute;inset:0;
   background:
-    linear-gradient(90deg,rgba(0,34,54,.92) 0%,rgba(0,34,54,.74) 31%,rgba(0,0,0,.12) 58%,rgba(0,0,0,.36) 100%),
-    linear-gradient(0deg,rgba(0,0,0,.38),rgba(0,0,0,0) 46%)
+    linear-gradient(90deg,rgba(0,34,54,.58) 0%,rgba(0,34,54,.36) 30%,rgba(0,0,0,.04) 58%,rgba(0,0,0,.16) 100%),
+    linear-gradient(0deg,rgba(0,0,0,.18),rgba(0,0,0,0) 42%)
 }
 .brand{position:absolute;left:.22in;top:.18in;font-size:.13in;font-weight:800;letter-spacing:.01in}
 .headline{position:absolute;left:.22in;top:.62in;font-size:.36in;font-weight:900;line-height:.98;text-shadow:0 2px 5px rgba(0,0,0,.65)}
@@ -1172,8 +1172,10 @@ html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-
   text-shadow:0 2px 4px rgba(0,0,0,.8)
 }
 .address{
-  position:absolute;left:.23in;bottom:.47in;font-size:.085in;color:#eef3f5;
-  text-shadow:0 2px 4px rgba(0,0,0,.8)
+  position:absolute;right:.18in;top:.16in;max-width:2.35in;
+  font-size:.085in;font-weight:700;line-height:1.2;color:white;text-align:right;
+  background:rgba(0,34,54,.48);padding:.06in .08in;border-radius:7px;
+  text-shadow:0 1px 3px rgba(0,0,0,.7)
 }
 @media print{
   html,body{width:5.5in!important;height:4.25in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
