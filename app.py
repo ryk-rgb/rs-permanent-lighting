@@ -15,6 +15,7 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-2.5-sunburst")
+OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-5.4-mini")
 GHL_WEBHOOK_URL = os.environ.get("GHL_WEBHOOK_URL", "")
 BUSINESS_NAME = os.environ.get("BUSINESS_NAME", "RS Permanent Lighting")
 BUSINESS_PHONE = os.environ.get("BUSINESS_PHONE", "704-621-6399")
@@ -283,7 +284,7 @@ def fetch_mapillary_photo_for_property(pid):
     attribution+=" — CC BY-SA; attribution/share-alike requirements apply. Verify exact house before marketing use."
     c=db(); cur=c.cursor()
     cur.execute(
-        "UPDATE properties SET original_image=%s,original_mime=%s,image_source=%s,image_license_ok=%s,status='READY_FOR_MOCKUP' WHERE id=%s",
+        "UPDATE properties SET original_image=%s,original_mime=%s,image_source=%s,image_license_ok=%s,status='READY_FOR_MOCKUP',photo_verify_status='UNVERIFIED',photo_verify_note='' WHERE id=%s",
         (img.content,mime,attribution,False,pid)
     )
     c.commit(); c.close()
@@ -536,7 +537,7 @@ def dashboard():
       <a class="card stat" href="/leads" style="text-decoration:none;color:inherit">Leads<strong>{{s.leads}}</strong></a>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
-      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn green" id="bulkMockupBtn" type="button" onclick="generateAllMockups()">Generate All Mockups</button><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
+      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="bulkVerifyBtn" type="button" onclick="verifyAllPhotos()">Verify All Photos</button><button class="btn green" id="bulkMockupBtn" type="button" onclick="generateAllMockups()">Generate All Mockups</button><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
     <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>Print</th><th>#</th><th>Property</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
     {% for p in rows %}<tr><td><input type="checkbox" class="print-pick" value="{{p.id}}" style="width:18px;height:18px"></td><td>{{p.id}}</td><td>
@@ -553,7 +554,7 @@ def dashboard():
           {% else %}
             <span style="background:#eef2f4;color:#52636d;border:1px solid #cfd8dd;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">UNVERIFIED</span>
           {% endif %}
-          <a class="btn" href="/property/{{p.id}}/verify-photo" style="padding:5px 8px;font-size:11px">Verify Photo</a>
+          <form method=post action="/property/{{p.id}}/auto-verify" style="display:inline"><button type=submit style="padding:5px 8px;font-size:11px">AI Verify</button></form><a class="btn" href="/property/{{p.id}}/verify-photo" style="padding:5px 8px;font-size:11px">Review</a>
         </div>
       {% endif %}
     </td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
@@ -563,6 +564,34 @@ def dashboard():
       const ids=[...document.querySelectorAll('.print-pick:checked')].map(x=>x.value);
       if(ids.length!==2){alert('Select exactly two properties to print.');return;}
       window.open('/postcard/'+ids[0]+'?second='+ids[1], '_blank');
+    }
+
+    async function verifyAllPhotos(){
+      const ids=[{% for p in rows %}{% if p.has_original %}{{p.id}},{% endif %}{% endfor %}];
+      if(!ids.length){alert('No property photos to verify.');return;}
+      if(!confirm('AI-verify '+ids.length+' property photos against Street View? Keep this page open until it finishes.')) return;
+
+      const btn=document.getElementById('bulkVerifyBtn');
+      btn.disabled=true;
+      let checked=0, failed=0;
+
+      for(const id of ids){
+        btn.textContent='Verifying '+(checked+failed+1)+' of '+ids.length+'…';
+        try{
+          const r=await fetch('/property/'+id+'/auto-verify',{
+            method:'POST',
+            credentials:'same-origin',
+            headers:{'X-Bulk-Verify':'1'}
+          });
+          if(r.ok) checked++; else failed++;
+        }catch(e){
+          failed++;
+        }
+      }
+
+      btn.textContent='Verification Finished';
+      alert('Photo verification finished. Checked: '+checked+(failed ? '. Needs manual review/errors: '+failed+'.' : '.'));
+      location.reload();
     }
 
     async function generateAllMockups(){
@@ -847,6 +876,129 @@ def add_property():
 
 
 
+
+def _streetview_bytes_for_property(p):
+    if not GOOGLE_MAPS_API_KEY:
+        return None, None, "Google Maps API key is not configured."
+    location=f"{p['address']}, {p['city']}, {p['state']} {p['zip']}"
+    try:
+        r=requests.get(
+            "https://maps.googleapis.com/maps/api/streetview",
+            params={
+                "size":"640x480",
+                "location":location,
+                "source":"outdoor",
+                "fov":"90",
+                "pitch":"0",
+                "return_error_code":"true",
+                "key":GOOGLE_MAPS_API_KEY
+            },
+            timeout=35
+        )
+        if not r.ok:
+            return None, None, f"Street View returned {r.status_code}."
+        return r.content, (r.headers.get("Content-Type") or "image/jpeg").split(";")[0], None
+    except Exception as e:
+        return None, None, f"Street View request failed: {e}"
+
+
+def _response_text(data):
+    if isinstance(data,dict):
+        if data.get("output_text"):
+            return data["output_text"]
+        for item in data.get("output",[]) or []:
+            for part in item.get("content",[]) or []:
+                if part.get("type") in ("output_text","text") and part.get("text"):
+                    return part["text"]
+    return ""
+
+
+def auto_verify_property_photo(pid):
+    p=get_property(pid)
+    if not p or p["original_image"] is None:
+        return False, "UNVERIFIED", "No stored property photo."
+
+    street_bytes,street_mime,err=_streetview_bytes_for_property(p)
+    if err or not street_bytes:
+        return False, "NEEDS_REVIEW", err or "Street View unavailable."
+
+    if not OPENAI_API_KEY:
+        return False, "NEEDS_REVIEW", "OpenAI API key is not configured."
+
+    original_mime=p["original_mime"] or "image/jpeg"
+    original_b64=base64.b64encode(bytes(p["original_image"])).decode("ascii")
+    street_b64=base64.b64encode(street_bytes).decode("ascii")
+
+    prompt=f"""You are verifying a direct-mail property photo for this exact address:
+{p['address']}, {p['city']}, {p['state']} {p['zip']}.
+
+Image 1 is the stored/imported property photo.
+Image 2 is a live Google Street View reference for the address.
+
+Determine whether Image 1:
+1) shows the FRONT exterior of the same house/property as Image 2,
+2) is instead a side/rear/interior/irrelevant image, or
+3) cannot be matched confidently because Street View angle/age/visibility is insufficient.
+
+Compare durable architectural features: roof/gable shape, number of stories, garage placement, window/door layout, driveway approach, facade massing, chimney/porch placement. Allow for normal changes in paint, landscaping, vehicles, seasons, renovations, and Street View age.
+
+Be conservative. Only choose VERIFIED when the same property and front exterior are strongly supported.
+Return ONLY valid JSON in this exact form:
+{{"status":"VERIFIED|NEEDS_REVIEW|WRONG_PHOTO","confidence":"HIGH|MEDIUM|LOW","reason":"short reason under 180 characters"}}"""
+
+    body={
+      "model":OPENAI_VISION_MODEL,
+      "input":[{
+        "role":"user",
+        "content":[
+          {"type":"input_text","text":prompt},
+          {"type":"input_image","image_url":f"data:{original_mime};base64,{original_b64}","detail":"high"},
+          {"type":"input_image","image_url":f"data:{street_mime};base64,{street_b64}","detail":"high"}
+        ]
+      }],
+      "max_output_tokens":220
+    }
+
+    try:
+        r=requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={"Authorization":f"Bearer {OPENAI_API_KEY}","Content-Type":"application/json"},
+            json=body,
+            timeout=120
+        )
+        if not r.ok:
+            return False,"NEEDS_REVIEW",f"AI verify error {r.status_code}: {r.text[:220]}"
+        raw=_response_text(r.json()).strip()
+        if raw.startswith("```"):
+            raw=raw.replace("```json","").replace("```","").strip()
+        result=__import__("json").loads(raw)
+        status=str(result.get("status","NEEDS_REVIEW")).upper()
+        confidence=str(result.get("confidence","LOW")).upper()
+        reason=str(result.get("reason","AI comparison completed."))[:220]
+        if status not in ("VERIFIED","NEEDS_REVIEW","WRONG_PHOTO"):
+            status="NEEDS_REVIEW"
+        # Only auto-approve high-confidence matches.
+        if status=="VERIFIED" and confidence!="HIGH":
+            status="NEEDS_REVIEW"
+        note=f"AI {confidence}: {reason}"
+        conn=db(); cur=conn.cursor()
+        cur.execute("UPDATE properties SET photo_verify_status=%s,photo_verify_note=%s WHERE id=%s",(status,note,pid))
+        conn.commit(); conn.close()
+        return True,status,note
+    except Exception as e:
+        return False,"NEEDS_REVIEW",f"AI verification failed: {e}"
+
+
+@app.post("/property/<int:pid>/auto-verify")
+@auth_required
+def auto_verify_photo(pid):
+    ok,status,msg=auto_verify_property_photo(pid)
+    if request.headers.get("X-Bulk-Verify"):
+        return (f"{status}: {msg}",200 if ok else 422)
+    flash(f"{status}: {msg}")
+    return redirect(url_for("dashboard"))
+
+
 @app.route("/property/<int:pid>/verify-photo",methods=["GET","POST"])
 @auth_required
 def verify_photo(pid):
@@ -970,7 +1122,7 @@ def property_detail(pid):
                 data=f.read()
                 if len(data)>15*1024*1024: raise ValueError("Image must be under 15 MB.")
                 if action=="upload_original":
-                    cur.execute("UPDATE properties SET original_image=%s,original_mime=%s,status='READY_FOR_MOCKUP' WHERE id=%s",(data,f.mimetype,pid))
+                    cur.execute("UPDATE properties SET original_image=%s,original_mime=%s,status='READY_FOR_MOCKUP',photo_verify_status='UNVERIFIED',photo_verify_note='' WHERE id=%s",(data,f.mimetype,pid))
                 else:
                     cur.execute("UPDATE properties SET mockup_image=%s,mockup_mime=%s,status='REVIEW' WHERE id=%s",(data,f.mimetype,pid))
             elif action=="save":
