@@ -1144,10 +1144,10 @@ def postcard(pid):
 <title>RS Permanent Lighting Postcard</title>
 <style>
 @page{size:9in 6in;margin:0}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#111}
-.page{width:9in;height:6in;position:relative;overflow:hidden;background:#073d5b;color:white}
-.photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+html,body{margin:0!important;padding:0!important;width:9in;height:6in;font-family:Arial,Helvetica,sans-serif;background:#111}
+.page{width:9in!important;height:6in!important;position:relative;overflow:hidden;background:#073d5b;color:white;page-break-after:avoid}
+.photo{position:absolute;inset:0;width:9in!important;height:6in!important;object-fit:cover;display:block}
 .shade{
   position:absolute;inset:0;
   background:
@@ -1175,7 +1175,11 @@ html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#
   position:absolute;left:.40in;bottom:.72in;font-size:.13in;color:#eef3f5;
   text-shadow:0 2px 4px rgba(0,0,0,.8)
 }
-@media print{body{background:white}}
+@media print{
+  html,body{width:9in!important;height:6in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
+  .page{width:9in!important;height:6in!important;margin:0!important;page-break-inside:avoid!important}
+  .photo{width:9in!important;height:6in!important;display:block!important}
+}
 </style>
 </head>
 <body>
@@ -1200,12 +1204,33 @@ html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#
   <div class="qrbox">
     <img src="/qr/{{p.token}}.png" alt="Property QR code">
     <div class="qrtext">
-      <b>SCAN TO VIEW YOUR DESIGN</b>
-      Request your personalized estimate
+      <b>SCAN FOR PRICING</b>
+      Request your custom estimate
     </div>
   </div>
 </section>
-<script>setTimeout(()=>window.print(),600)</script>
+<script>
+(function(){
+  const imgs=[...document.images];
+  let printed=false;
+  function doPrint(){
+    if(printed) return;
+    printed=true;
+    setTimeout(()=>window.print(),250);
+  }
+  if(!imgs.length) return doPrint();
+  let remaining=imgs.filter(i=>!i.complete).length;
+  if(remaining===0) return doPrint();
+  imgs.forEach(img=>{
+    if(!img.complete){
+      const done=()=>{remaining--; if(remaining<=0) doPrint();};
+      img.addEventListener('load',done,{once:true});
+      img.addEventListener('error',done,{once:true});
+    }
+  });
+  setTimeout(doPrint,5000);
+})();
+</script>
 </body>
 </html>
 """,p=p,kind=img_kind,phone=BUSINESS_PHONE)
