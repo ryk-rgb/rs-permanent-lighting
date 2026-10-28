@@ -1143,42 +1143,42 @@ def postcard(pid):
 <meta charset=utf-8>
 <title>RS Permanent Lighting Postcard</title>
 <style>
-@page{size:9in 6in;margin:0}
+@page{size:5.5in 4.25in;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-html,body{margin:0!important;padding:0!important;width:9in;height:6in;font-family:Arial,Helvetica,sans-serif;background:#111}
-.page{width:9in!important;height:6in!important;position:relative;overflow:hidden;background:#073d5b;color:white;page-break-after:avoid}
-.photo{position:absolute;inset:0;width:9in!important;height:6in!important;object-fit:cover;display:block}
+html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-family:Arial,Helvetica,sans-serif;background:#111}
+.page{width:5.5in!important;height:4.25in!important;position:relative;overflow:hidden;background:#073d5b;color:white;page-break-after:avoid}
+.photo{position:absolute;inset:0;width:5.5in!important;height:4.25in!important;object-fit:cover;display:block}
 .shade{
   position:absolute;inset:0;
   background:
     linear-gradient(90deg,rgba(0,34,54,.92) 0%,rgba(0,34,54,.74) 31%,rgba(0,0,0,.12) 58%,rgba(0,0,0,.36) 100%),
     linear-gradient(0deg,rgba(0,0,0,.38),rgba(0,0,0,0) 46%)
 }
-.brand{position:absolute;left:.38in;top:.30in;font-size:.19in;font-weight:800;letter-spacing:.02in}
-.headline{position:absolute;left:.38in;top:1.00in;font-size:.56in;font-weight:900;line-height:.98;text-shadow:0 2px 5px rgba(0,0,0,.65)}
+.brand{position:absolute;left:.22in;top:.18in;font-size:.13in;font-weight:800;letter-spacing:.01in}
+.headline{position:absolute;left:.22in;top:.62in;font-size:.36in;font-weight:900;line-height:.98;text-shadow:0 2px 5px rgba(0,0,0,.65)}
 .headline span{color:#9acb3b}
-.sub{position:absolute;left:.40in;top:2.35in;width:3.15in;font-size:.22in;font-weight:600;line-height:1.28;text-shadow:0 2px 4px rgba(0,0,0,.8)}
-.benefit{position:absolute;left:.40in;top:3.18in;width:3.6in;font-size:.145in;line-height:1.35;color:#f4f7f8;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.sub{position:absolute;left:.23in;top:1.56in;width:2.15in;font-size:.14in;font-weight:600;line-height:1.25;text-shadow:0 2px 4px rgba(0,0,0,.8)}
+.benefit{position:absolute;left:.23in;top:2.20in;width:2.35in;font-size:.095in;line-height:1.3;color:#f4f7f8;text-shadow:0 1px 3px rgba(0,0,0,.8)}
 .qrbox{
-  position:absolute;right:.34in;bottom:.34in;width:2.75in;
+  position:absolute;right:.18in;bottom:.18in;width:1.9in;
   background:rgba(255,255,255,.97);color:#073d5b;border:4px solid #9acb3b;border-radius:14px;
-  padding:.12in;display:flex;gap:.12in;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.3)
+  padding:.08in;display:flex;gap:.08in;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.3)
 }
-.qrbox img{width:1.08in;height:1.08in;flex:0 0 auto}
-.qrtext{font-size:.13in;line-height:1.2}
-.qrtext b{font-size:.17in;display:block;margin-bottom:.03in}
+.qrbox img{width:.78in;height:.78in;flex:0 0 auto}
+.qrtext{font-size:.085in;line-height:1.2}
+.qrtext b{font-size:.105in;display:block;margin-bottom:.02in}
 .contact{
-  position:absolute;left:.40in;bottom:.38in;font-size:.15in;font-weight:700;
+  position:absolute;left:.23in;bottom:.22in;font-size:.095in;font-weight:700;
   text-shadow:0 2px 4px rgba(0,0,0,.8)
 }
 .address{
-  position:absolute;left:.40in;bottom:.72in;font-size:.13in;color:#eef3f5;
+  position:absolute;left:.23in;bottom:.47in;font-size:.085in;color:#eef3f5;
   text-shadow:0 2px 4px rgba(0,0,0,.8)
 }
 @media print{
-  html,body{width:9in!important;height:6in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
-  .page{width:9in!important;height:6in!important;margin:0!important;page-break-inside:avoid!important}
-  .photo{width:9in!important;height:6in!important;display:block!important}
+  html,body{width:5.5in!important;height:4.25in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
+  .page{width:5.5in!important;height:4.25in!important;margin:0!important;page-break-inside:avoid!important}
+  .photo{width:5.5in!important;height:4.25in!important;display:block!important}
 }
 </style>
 </head>
