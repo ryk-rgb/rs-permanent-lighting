@@ -1141,91 +1141,68 @@ def postcard(pid):
 <html>
 <head>
 <meta charset=utf-8>
-<title>RS Permanent Lighting Postcard</title>
+<title>RS Permanent Lighting Postcard Sheet</title>
 <style>
-@page{size:4.25in 5.5in;margin:0}
+@page{size:8.5in 11in;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-html,body{margin:0!important;padding:0!important;width:4.25in;height:5.5in;font-family:Arial,Helvetica,sans-serif;background:#111}
-.page{width:4.25in!important;height:5.5in!important;position:relative;overflow:hidden;background:#073d5b;color:white;page-break-after:avoid}
-.photo{position:absolute;inset:0;width:4.25in!important;height:5.5in!important;object-fit:cover;display:block}
-.shade{
-  position:absolute;inset:0;
-  background:
-    linear-gradient(90deg,rgba(0,34,54,.58) 0%,rgba(0,34,54,.36) 30%,rgba(0,0,0,.04) 58%,rgba(0,0,0,.16) 100%),
-    linear-gradient(0deg,rgba(0,0,0,.18),rgba(0,0,0,0) 42%)
-}
+html,body{margin:0!important;padding:0!important;width:8.5in;height:11in;font-family:Arial,Helvetica,sans-serif;background:white}
+.sheet{width:8.5in;height:11in;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;background:white;overflow:hidden}
+.postcard{width:4.25in;height:5.5in;position:relative;overflow:hidden;background:#073d5b;color:white;flex:0 0 5.5in}
+.postcard:first-child{border-bottom:1px dashed #777}
+.photo{position:absolute;inset:0;width:4.25in;height:5.5in;object-fit:cover;display:block}
+.shade{position:absolute;inset:0;background:
+  linear-gradient(90deg,rgba(0,34,54,.58) 0%,rgba(0,34,54,.36) 30%,rgba(0,0,0,.04) 58%,rgba(0,0,0,.16) 100%),
+  linear-gradient(0deg,rgba(0,0,0,.18),rgba(0,0,0,0) 42%)}
 .brand{position:absolute;left:.22in;top:.18in;font-size:.13in;font-weight:800;letter-spacing:.01in}
 .headline{position:absolute;left:.22in;top:.72in;font-size:.34in;font-weight:900;line-height:.98;text-shadow:0 2px 5px rgba(0,0,0,.65)}
 .headline span{color:#9acb3b}
 .sub{position:absolute;left:.23in;top:1.62in;width:2.55in;font-size:.13in;font-weight:600;line-height:1.25;text-shadow:0 2px 4px rgba(0,0,0,.8)}
 .benefit{position:absolute;left:.23in;top:2.20in;width:2.65in;font-size:.09in;line-height:1.3;color:#f4f7f8;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.qrbox{
-  position:absolute;right:.16in;bottom:.18in;width:1.75in;
-  background:rgba(255,255,255,.97);color:#073d5b;border:4px solid #9acb3b;border-radius:14px;
-  padding:.08in;display:flex;gap:.08in;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.3)
-}
-.qrbox img{width:.78in;height:.78in;flex:0 0 auto}
-.qrtext{font-size:.085in;line-height:1.2}
-.qrtext b{font-size:.105in;display:block;margin-bottom:.02in}
-.contact{
-  position:absolute;left:.23in;bottom:.22in;font-size:.095in;font-weight:700;
-  text-shadow:0 2px 4px rgba(0,0,0,.8)
-}
-.address{
-  position:absolute;right:.18in;top:.16in;max-width:2.35in;
-  font-size:.085in;font-weight:700;line-height:1.2;color:white;text-align:right;
-  background:#fff;padding:.07in .09in;border-radius:7px;
-  color:#000;text-shadow:none;box-shadow:0 2px 8px rgba(0,0,0,.18)
-}
+.qrbox{position:absolute;right:.16in;bottom:.18in;width:1.75in;background:rgba(255,255,255,.97);color:#073d5b;border:3px solid #9acb3b;border-radius:10px;padding:.07in;display:flex;gap:.07in;align-items:center;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.qrbox img{width:.72in;height:.72in;flex:0 0 auto}
+.qrtext{font-size:.078in;line-height:1.2}
+.qrtext b{font-size:.10in;display:block;margin-bottom:.02in}
+.contact{position:absolute;left:.23in;bottom:.22in;font-size:.09in;font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,.8)}
+.address{position:absolute;right:.16in;top:.16in;max-width:1.7in;font-size:.082in;font-weight:700;line-height:1.18;color:#000;text-align:right;background:#fff;padding:.07in .09in;border-radius:7px;text-shadow:none;box-shadow:0 2px 8px rgba(0,0,0,.18)}
 @media print{
-  html,body{width:4.25in!important;height:5.5in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
-  .page{width:4.25in!important;height:5.5in!important;margin:0!important;page-break-inside:avoid!important}
-  .photo{width:4.25in!important;height:5.5in!important;display:block!important}
+  html,body,.sheet{width:8.5in!important;height:11in!important;margin:0!important;padding:0!important;overflow:hidden!important}
+  .postcard{width:4.25in!important;height:5.5in!important}
+  .photo{width:4.25in!important;height:5.5in!important}
 }
 </style>
 </head>
 <body>
-<section class="page">
+<div class="sheet">
+{% for copy in [1,2] %}
+<section class="postcard">
   {% if p.mockup_image or p.original_image %}
     <img class="photo" src="/media/{{p.id}}/{{kind}}">
   {% endif %}
   <div class="shade"></div>
-
   <div class="brand">RS PERMANENT LIGHTING</div>
-
   <div class="headline">YES — THAT'S<br><span>YOUR</span> HOUSE.</div>
-
   <div class="sub">See what permanent lighting could look like on your home.</div>
-
   <div class="benefit">Elegant year-round lighting for holidays, game days, special occasions, and everyday curb appeal.</div>
-
   <div class="address">{{p.address}}<br>{{p.city}}<br>{{p.state}}<br>{{p.zip}}</div>
-
   <div class="contact">Call or Text {{phone}}</div>
-
   <div class="qrbox">
     <img src="/qr/{{p.token}}.png" alt="Property QR code">
-    <div class="qrtext">
-      <b>SCAN FOR PRICING</b>
-      Request your custom estimate
-    </div>
+    <div class="qrtext"><b>SCAN FOR PRICING</b>Request your custom estimate</div>
   </div>
 </section>
+{% endfor %}
+</div>
 <script>
 (function(){
   const imgs=[...document.images];
   let printed=false;
-  function doPrint(){
-    if(printed) return;
-    printed=true;
-    setTimeout(()=>window.print(),250);
-  }
-  if(!imgs.length) return doPrint();
+  function doPrint(){if(printed)return;printed=true;setTimeout(()=>window.print(),250);}
+  if(!imgs.length)return doPrint();
   let remaining=imgs.filter(i=>!i.complete).length;
-  if(remaining===0) return doPrint();
+  if(remaining===0)return doPrint();
   imgs.forEach(img=>{
     if(!img.complete){
-      const done=()=>{remaining--; if(remaining<=0) doPrint();};
+      const done=()=>{remaining--;if(remaining<=0)doPrint();};
       img.addEventListener('load',done,{once:true});
       img.addEventListener('error',done,{once:true});
     }
