@@ -531,8 +531,8 @@ def dashboard():
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
       <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
-    <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th></tr></thead><tbody>
-    {% for p in rows %}<tr><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td></tr>{% endfor %}
+    <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
+    {% for p in rows %}<tr><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
     </tbody></table></div>
     """
     return page("RS Permanent Lighting",body,s=stats,rows=rows)
@@ -565,7 +565,7 @@ def property_list(kind):
       </div>
     </div>
     <div class=card style="overflow:auto;padding:0">
-      <table><thead><tr><th>Property</th><th>Photo</th><th>Mockup</th><th>Status</th><th>QR scans</th></tr></thead><tbody>
+      <table><thead><tr><th>Property</th><th>Photo</th><th>Mockup</th><th>Status</th><th>QR scans</th><th></th></tr></thead><tbody>
       {% for p in rows %}
         <tr>
           <td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class=muted>{{p.city}}, {{p.state}} {{p.zip}}</span></td>
@@ -573,6 +573,7 @@ def property_list(kind):
           <td>{{"✓" if p.has_mockup else "—"}}</td>
           <td><span class=badge>{{p.status}}</span></td>
           <td>{{p.scans}}</td>
+          <td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td>
         </tr>
       {% endfor %}
       </tbody></table>
@@ -613,6 +614,23 @@ def leads_page():
     </div>
     """
     return page("Pricing Requests",body,rows=rows)
+
+
+@app.post("/property/<int:pid>/delete")
+@auth_required
+def delete_property(pid):
+    c=db(); cur=c.cursor()
+    cur.execute("SELECT address FROM properties WHERE id=%s",(pid,))
+    p=cur.fetchone()
+    if not p:
+        c.close()
+        flash("Property not found.")
+        return redirect(url_for("dashboard"))
+    cur.execute("DELETE FROM leads WHERE property_id=%s",(pid,))
+    cur.execute("DELETE FROM properties WHERE id=%s",(pid,))
+    c.commit(); c.close()
+    flash(f"Deleted {p['address']}.")
+    return redirect(url_for("dashboard"))
 
 @app.get("/photo-queue")
 @auth_required
