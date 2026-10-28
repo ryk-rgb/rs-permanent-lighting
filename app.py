@@ -954,7 +954,7 @@ form{margin-top:10px}input,textarea{width:100%;box-sizing:border-box;padding:13p
 <body>
 <div class=hero><div class=wrap>
   <div class=brand>{{biz}}</div>
-  <div class=eyebrow>PERSONALIZED DESIGN FOR {{p.address}}</div>
+  <div class=eyebrow>PRICING REQUEST FOR {{p.address}}</div>
   <h1>THIS IS <span class=green>YOUR HOME.</span></h1>
   <p>See what permanent architectural lighting could look like on your property — installed once and ready for every season.</p>
 </div></div>
@@ -977,7 +977,7 @@ form{margin-top:10px}input,textarea{width:100%;box-sizing:border-box;padding:13p
       {% endif %}
 
       <div class=ctas>
-        <a class="btn primary" href="#estimate">Book My Free Estimate</a>
+        <a class="btn primary" href="#estimate">Request My Price</a>
         <a class="btn secondary" href="tel:+1{{phone_digits}}">Call</a>
         <a class="btn dark" href="sms:+1{{phone_digits}}?body=Hi%20RS%20Permanent%20Lighting%2C%20I%20received%20a%20postcard%20for%20{{p.address|urlencode}}">Text</a>
       </div>
@@ -995,8 +995,8 @@ form{margin-top:10px}input,textarea{width:100%;box-sizing:border-box;padding:13p
   </div>
 
   <div class="card offer">
-    <h2>See the exact price for your home</h2>
-    <p style="margin:0">Your consultation includes an on-site measurement, lighting layout and exact installation price. Ask about available payment or financing options during your estimate.</p>
+    <h2>Get pricing for your home</h2>
+    <p style="margin:0">Send us your details and we’ll contact you to confirm measurements, installation details, and your exact price. Ask about available payment or financing options.</p>
   </div>
 
   <div class=card id=estimate>
@@ -1018,7 +1018,7 @@ form{margin-top:10px}input,textarea{width:100%;box-sizing:border-box;padding:13p
 
 <div class=sticky>
   <a class="btn secondary" href="tel:+1{{phone_digits}}">Call Now</a>
-  <a class="btn primary" href="#estimate">Free Estimate</a>
+  <a class="btn primary" href="#estimate">Request Pricing</a>
 </div>
 </body></html>
 """,biz=BUSINESS_NAME,p=p,kind=img_kind,phone=BUSINESS_PHONE,phone_digits=phone_digits,estimate=estimate,estimate_low=estimate_low,estimate_high=estimate_high,linear_ft=linear_ft)
