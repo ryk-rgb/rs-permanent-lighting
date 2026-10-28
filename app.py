@@ -1175,7 +1175,7 @@ html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-
   position:absolute;right:.18in;top:.16in;max-width:2.35in;
   font-size:.085in;font-weight:700;line-height:1.2;color:white;text-align:right;
   background:#fff;padding:.07in .09in;border-radius:7px;
-  color:#073d5b;text-shadow:none;box-shadow:0 2px 8px rgba(0,0,0,.18)
+  color:#000;text-shadow:none;box-shadow:0 2px 8px rgba(0,0,0,.18)
 }
 @media print{
   html,body{width:5.5in!important;height:4.25in!important;margin:0!important;padding:0!important;overflow:hidden!important;background:white!important}
