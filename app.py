@@ -521,12 +521,12 @@ def dashboard():
     }
     body="""
     <div class="grid">
-      <div class="card stat">Properties<strong>{{s.total}}</strong></div>
-      <div class="card stat">Photos<strong>{{s.photos}}</strong></div>
-      <div class="card stat">Mockups<strong>{{s.mockups}}</strong></div>
-      <div class="card stat">Approved<strong>{{s.approved}}</strong></div>
-      <div class="card stat">QR scans<strong>{{s.scans}}</strong></div>
-      <div class="card stat">Leads<strong>{{s.leads}}</strong></div>
+      <a class="card stat" href="/list/all" style="text-decoration:none;color:inherit">Properties<strong>{{s.total}}</strong></a>
+      <a class="card stat" href="/list/photos" style="text-decoration:none;color:inherit">Photos<strong>{{s.photos}}</strong></a>
+      <a class="card stat" href="/list/mockups" style="text-decoration:none;color:inherit">Mockups<strong>{{s.mockups}}</strong></a>
+      <a class="card stat" href="/list/approved" style="text-decoration:none;color:inherit">Approved<strong>{{s.approved}}</strong></a>
+      <a class="card stat" href="/list/scans" style="text-decoration:none;color:inherit">QR scans<strong>{{s.scans}}</strong></a>
+      <a class="card stat" href="/leads" style="text-decoration:none;color:inherit">Leads<strong>{{s.leads}}</strong></a>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
       <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
@@ -536,6 +536,83 @@ def dashboard():
     </tbody></table></div>
     """
     return page("RS Permanent Lighting",body,s=stats,rows=rows)
+
+
+@app.get("/list/<kind>")
+@auth_required
+def property_list(kind):
+    c=db(); cur=c.cursor()
+    where="id >= %s"; params=[ACTIVE_MIN_PROPERTY_ID]; title="Properties"
+    if kind=="photos":
+        where += " AND original_image IS NOT NULL"; title="Properties with photos"
+    elif kind=="mockups":
+        where += " AND mockup_image IS NOT NULL"; title="Generated mockups"
+    elif kind=="approved":
+        where += " AND status='APPROVED'"; title="Approved properties"
+    elif kind=="scans":
+        where += " AND scans > 0"; title="QR scans"
+    cur.execute(f"""SELECT id,address,city,state,zip,status,scans,mailed,quote_amount,
+                    (original_image IS NOT NULL) AS has_original,
+                    (mockup_image IS NOT NULL) AS has_mockup
+                    FROM properties WHERE {where}
+                    ORDER BY scans DESC,id""",tuple(params))
+    rows=cur.fetchall(); c.close()
+    body="""
+    <div class=card>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div><h2 style="margin:0">{{title}}</h2><div class=muted>{{rows|length}} properties</div></div>
+        <a class="btn gray" href="/">Back to dashboard</a>
+      </div>
+    </div>
+    <div class=card style="overflow:auto;padding:0">
+      <table><thead><tr><th>Property</th><th>Photo</th><th>Mockup</th><th>Status</th><th>QR scans</th></tr></thead><tbody>
+      {% for p in rows %}
+        <tr>
+          <td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class=muted>{{p.city}}, {{p.state}} {{p.zip}}</span></td>
+          <td>{{"✓" if p.has_original else "—"}}</td>
+          <td>{{"✓" if p.has_mockup else "—"}}</td>
+          <td><span class=badge>{{p.status}}</span></td>
+          <td>{{p.scans}}</td>
+        </tr>
+      {% endfor %}
+      </tbody></table>
+    </div>
+    """
+    return page(title,body,title=title,rows=rows)
+
+@app.get("/leads")
+@auth_required
+def leads_page():
+    c=db(); cur=c.cursor()
+    cur.execute("""SELECT l.id,l.name,l.phone,l.email,l.notes,l.created_at,
+                          p.address,p.city,p.state,p.zip
+                   FROM leads l
+                   LEFT JOIN properties p ON p.id=l.property_id
+                   ORDER BY l.id DESC""")
+    rows=cur.fetchall(); c.close()
+    body="""
+    <div class=card>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div><h2 style="margin:0">Pricing Requests</h2><div class=muted>{{rows|length}} leads</div></div>
+        <a class="btn gray" href="/">Back to dashboard</a>
+      </div>
+    </div>
+    <div class=card style="overflow:auto;padding:0">
+      <table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Property</th><th>Notes</th><th>Submitted</th></tr></thead><tbody>
+      {% for l in rows %}
+        <tr>
+          <td><b>{{l.name or "—"}}</b></td>
+          <td>{% if l.phone %}<a href="tel:{{l.phone}}">{{l.phone}}</a>{% else %}—{% endif %}</td>
+          <td>{{l.email or "—"}}</td>
+          <td>{{l.address or "—"}}{% if l.city %}<br><span class=muted>{{l.city}}, {{l.state}} {{l.zip}}</span>{% endif %}</td>
+          <td>{{l.notes or "—"}}</td>
+          <td>{{l.created_at or "—"}}</td>
+        </tr>
+      {% endfor %}
+      </tbody></table>
+    </div>
+    """
+    return page("Pricing Requests",body,rows=rows)
 
 @app.get("/photo-queue")
 @auth_required
