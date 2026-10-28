@@ -817,7 +817,7 @@ def property_detail(pid):
       <div class=card><h3>2. Lighting mockup</h3>
         {% if p.mockup_image %}<img class=thumb src="/media/{{p.id}}/mockup">{% else %}<p class=muted>No mockup yet.</p>{% endif %}
         <form method=post enctype=multipart/form-data><input type=hidden name=action value=upload_mockup><input type=file name=image accept="image/*" required><button>Upload mockup</button></form>
-        <form method=post action="/property/{{p.id}}/generate" style="margin-top:10px"><button class=green {% if not p.original_image %}disabled{% endif %}>Generate AI mockup</button></form>
+        <form method=post action="/property/{{p.id}}/generate" style="margin-top:10px" onsubmit="var b=this.querySelector('button'); b.textContent='Generating AI mockup…'; b.disabled=true;"><button type=submit class=green>Generate AI mockup</button></form>{% if not p.original_image %}<p class=muted style="margin-top:8px">A real house photo must be uploaded before AI generation can start.</p>{% endif %}
       </div>
     </div>
     <div class=two>
