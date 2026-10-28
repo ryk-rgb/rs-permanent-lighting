@@ -538,8 +538,25 @@ def dashboard():
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
       <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn green" id="bulkMockupBtn" type="button" onclick="generateAllMockups()">Generate All Mockups</button><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
-    <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>Print</th><th>#</th><th>Address</th><th>Photo</th><th>Photo Verify</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
-    {% for p in rows %}<tr><td><input type="checkbox" class="print-pick" value="{{p.id}}" style="width:18px;height:18px"></td><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{% if p.has_original %}<a href="/property/{{p.id}}/verify-photo"><b>{{p.photo_verify_status}}</b></a>{% else %}—{% endif %}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
+    <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>Print</th><th>#</th><th>Property</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
+    {% for p in rows %}<tr><td><input type="checkbox" class="print-pick" value="{{p.id}}" style="width:18px;height:18px"></td><td>{{p.id}}</td><td>
+      <a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br>
+      <span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span>
+      {% if p.has_original %}
+        <div style="margin-top:7px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          {% if p.photo_verify_status=="VERIFIED" %}
+            <span style="background:#e8f6e8;color:#176b2c;border:1px solid #a8d5ae;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">✓ VERIFIED FRONT</span>
+          {% elif p.photo_verify_status=="WRONG_PHOTO" %}
+            <span style="background:#fdebea;color:#9f1d18;border:1px solid #efb4b0;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">✕ WRONG PHOTO</span>
+          {% elif p.photo_verify_status=="NEEDS_REVIEW" %}
+            <span style="background:#fff4d6;color:#825500;border:1px solid #efd27a;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">⚠ NEEDS REVIEW</span>
+          {% else %}
+            <span style="background:#eef2f4;color:#52636d;border:1px solid #cfd8dd;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">UNVERIFIED</span>
+          {% endif %}
+          <a class="btn" href="/property/{{p.id}}/verify-photo" style="padding:5px 8px;font-size:11px">Verify Photo</a>
+        </div>
+      {% endif %}
+    </td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
     </tbody></table></div>
     <script>
     function printTwoSelected(){
