@@ -1199,7 +1199,7 @@ html,body{margin:0!important;padding:0!important;width:5.5in;height:4.25in;font-
 
   <div class="benefit">Elegant year-round lighting for holidays, game days, special occasions, and everyday curb appeal.</div>
 
-  <div class="address">{{p.address}}, {{p.city}}, {{p.state}} {{p.zip}}</div>
+  <div class="address">{{p.address}}<br>{{p.city}}<br>{{p.state}}<br>{{p.zip}}</div>
 
   <div class="contact">Call or Text {{phone}}</div>
 
