@@ -529,11 +529,18 @@ def dashboard():
       <a class="card stat" href="/leads" style="text-decoration:none;color:inherit">Leads<strong>{{s.leads}}</strong></a>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
-      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
+      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
-    <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
-    {% for p in rows %}<tr><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
+    <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>Print</th><th>#</th><th>Address</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
+    {% for p in rows %}<tr><td><input type="checkbox" class="print-pick" value="{{p.id}}" style="width:18px;height:18px"></td><td>{{p.id}}</td><td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class="muted">{{p.city}}, {{p.state}} {{p.zip}}</span></td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
     </tbody></table></div>
+    <script>
+    function printTwoSelected(){
+      const ids=[...document.querySelectorAll('.print-pick:checked')].map(x=>x.value);
+      if(ids.length!==2){alert('Select exactly two properties to print.');return;}
+      window.open('/postcard/'+ids[0]+'?second='+ids[1], '_blank');
+    }
+    </script>
     """
     return page("RS Permanent Lighting",body,s=stats,rows=rows)
 
@@ -1135,7 +1142,13 @@ def lead(token):
 def postcard(pid):
     p=get_property(pid)
     if not p:return "Not found",404
-    img_kind="mockup" if p["mockup_image"] is not None else "original"
+    second=request.args.get("second",type=int)
+    p2=get_property(second) if second else p
+    if not p2:return "Second property not found",404
+    items=[
+      {"p":p,"kind":"mockup" if p["mockup_image"] is not None else "original"},
+      {"p":p2,"kind":"mockup" if p2["mockup_image"] is not None else "original"}
+    ]
     return render_template_string("""
 <!doctype html>
 <html>
@@ -1173,20 +1186,21 @@ html,body{margin:0!important;padding:0!important;width:8.5in;height:11in;font-fa
 </head>
 <body>
 <div class="sheet">
-{% for copy in [1,2] %}
+{% for item in items %}
+{% set prop=item.p %}
 <section class="postcard">
-  {% if p.mockup_image or p.original_image %}
-    <img class="photo" src="/media/{{p.id}}/{{kind}}">
+  {% if prop.mockup_image or prop.original_image %}
+    <img class="photo" src="/media/{{prop.id}}/{{item.kind}}">
   {% endif %}
   <div class="shade"></div>
   <div class="brand">RS PERMANENT LIGHTING</div>
   <div class="headline">YES — THAT'S<br><span>YOUR</span> HOUSE.</div>
   <div class="sub">See what permanent lighting could look like on your home.</div>
   <div class="benefit">Elegant year-round lighting for holidays, game days, special occasions, and everyday curb appeal.</div>
-  <div class="address">{{p.address}}<br>{{p.city}}<br>{{p.state}}<br>{{p.zip}}</div>
+  <div class="address">{{prop.address}}<br>{{prop.city}}<br>{{prop.state}}<br>{{prop.zip}}</div>
   <div class="contact">Call or Text {{phone}}</div>
   <div class="qrbox">
-    <img src="/qr/{{p.token}}.png" alt="Property QR code">
+    <img src="/qr/{{prop.token}}.png" alt="Property QR code">
     <div class="qrtext"><b>SCAN FOR PRICING</b>Request your custom estimate</div>
   </div>
 </section>
@@ -1212,7 +1226,7 @@ html,body{margin:0!important;padding:0!important;width:8.5in;height:11in;font-fa
 </script>
 </body>
 </html>
-""",p=p,kind=img_kind,phone=BUSINESS_PHONE)
+""",items=items,phone=BUSINESS_PHONE)
 
 
 with app.app_context():
