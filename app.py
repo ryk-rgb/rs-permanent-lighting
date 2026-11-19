@@ -703,7 +703,7 @@ def property_list(kind):
     body="""
     <div class=card>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-        <div><h2 style="margin:0">{{title}}</h2><div class=muted>{{rows|length}} properties</div></div>
+        <div><h2 style="margin:0">{{title_text}}</h2><div class=muted>{{rows|length}} properties</div></div>
         <a class="btn gray" href="/">Back to dashboard</a>
       </div>
     </div>
@@ -734,7 +734,7 @@ def property_list(kind):
       </tbody></table>
     </div>
     """
-    return page(title,body,title=title,rows=rows)
+    return page(title,body,rows=rows,title_text=title)
 
 @app.get("/leads")
 @auth_required
