@@ -576,6 +576,7 @@ def dashboard():
       "total":len(rows),"photos":sum(1 for r in rows if r["has_original"]),
       "mockups":sum(1 for r in rows if r["has_mockup"]),
       "approved":sum(1 for r in rows if r["status"]=="APPROVED"),
+      "photo_issues":sum(1 for r in rows if r["has_original"] and r["photo_verify_status"] in ("UNVERIFIED","NEEDS_REVIEW","WRONG_PHOTO")),
       "scans":sum(r["scans"] for r in rows),"leads":leads
     }
     body="""
@@ -584,11 +585,12 @@ def dashboard():
       <a class="card stat" href="/list/photos" style="text-decoration:none;color:inherit">Photos<strong>{{s.photos}}</strong></a>
       <a class="card stat" href="/list/mockups" style="text-decoration:none;color:inherit">Mockups<strong>{{s.mockups}}</strong></a>
       <a class="card stat" href="/list/approved" style="text-decoration:none;color:inherit">Approved<strong>{{s.approved}}</strong></a>
+      <a class="card stat" href="/list/photo-issues" style="text-decoration:none;color:inherit;border:2px solid #e8b04b">Photo Issues<strong>{{s.photo_issues}}</strong><span class="muted">Unverified / review / wrong</span></a>
       <a class="card stat" href="/list/scans" style="text-decoration:none;color:inherit">QR scans<strong>{{s.scans}}</strong></a>
       <a class="card stat" href="/leads" style="text-decoration:none;color:inherit">Leads<strong>{{s.leads}}</strong></a>
     </div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
-      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="bulkVerifyBtn" type="button" onclick="verifyAllPhotos()">Verify All Photos</button><button class="btn green" id="bulkMockupBtn" type="button" onclick="generateAllMockups()">Generate All Mockups</button><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
+      <h2 style="margin:0">Canopy MLS target list</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="/list/photo-issues" style="background:#fff4d6;border:1px solid #efd27a;color:#825500">⚠ Review Problem Photos</a><button class="btn" id="bulkVerifyBtn" type="button" onclick="verifyAllPhotos()">Verify All Photos</button><button class="btn green" id="bulkMockupBtn" type="button" onclick="generateAllMockups()">Generate All Mockups</button><button class="btn green" type="button" onclick="printTwoSelected()">Print 2 Selected</button><a class="btn" href="/photo-queue">Needs photo queue</a><a class="btn" href="/import-csv">Import address + photos CSV</a><a class="btn green" href="/add">+ Add property</a></div>
     </div></div>
     <div class="card" style="overflow:auto;padding:0"><table><thead><tr><th>Print</th><th>#</th><th>Property</th><th>Photo</th><th>Mockup</th><th>Status</th><th>Scans</th><th>Quote</th><th></th></tr></thead><tbody>
     {% for p in rows %}<tr><td><input type="checkbox" class="print-pick" value="{{p.id}}" style="width:18px;height:18px"></td><td>{{p.id}}</td><td>
@@ -690,7 +692,9 @@ def property_list(kind):
         where += " AND status='APPROVED'"; title="Approved properties"
     elif kind=="scans":
         where += " AND scans > 0"; title="QR scans"
-    cur.execute(f"""SELECT id,address,city,state,zip,status,scans,mailed,quote_amount,
+    elif kind=="photo-issues":
+        where += " AND original_image IS NOT NULL AND photo_verify_status IN ('UNVERIFIED','NEEDS_REVIEW','WRONG_PHOTO')"; title="Photo verification issues"
+    cur.execute(f"""SELECT id,address,city,state,zip,status,scans,mailed,quote_amount,photo_verify_status,
                     (original_image IS NOT NULL) AS has_original,
                     (mockup_image IS NOT NULL) AS has_mockup
                     FROM properties WHERE {where}
@@ -704,11 +708,23 @@ def property_list(kind):
       </div>
     </div>
     <div class=card style="overflow:auto;padding:0">
-      <table><thead><tr><th>Property</th><th>Photo</th><th>Mockup</th><th>Status</th><th>QR scans</th><th></th></tr></thead><tbody>
+      <table><thead><tr><th>Property</th><th>Photo</th><th>Verification</th><th>Mockup</th><th>Status</th><th>QR scans</th><th></th></tr></thead><tbody>
       {% for p in rows %}
         <tr>
           <td><a href="/property/{{p.id}}"><b>{{p.address}}</b></a><br><span class=muted>{{p.city}}, {{p.state}} {{p.zip}}</span></td>
           <td>{{"✓" if p.has_original else "—"}}</td>
+          <td>
+            {% if p.photo_verify_status=="VERIFIED" %}
+              <span style="background:#e8f6e8;color:#176b2c;border:1px solid #a8d5ae;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">✓ VERIFIED</span>
+            {% elif p.photo_verify_status=="WRONG_PHOTO" %}
+              <span style="background:#fdebea;color:#9f1d18;border:1px solid #efb4b0;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">✕ WRONG</span>
+            {% elif p.photo_verify_status=="NEEDS_REVIEW" %}
+              <span style="background:#fff4d6;color:#825500;border:1px solid #efd27a;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">⚠ REVIEW</span>
+            {% else %}
+              <span style="background:#eef2f4;color:#52636d;border:1px solid #cfd8dd;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">UNVERIFIED</span>
+            {% endif %}
+            {% if p.has_original %}<div style="margin-top:6px"><a class="btn" href="/property/{{p.id}}/verify-photo" style="padding:5px 8px;font-size:11px">Open Review</a></div>{% endif %}
+          </td>
           <td>{{"✓" if p.has_mockup else "—"}}</td>
           <td><span class=badge>{{p.status}}</span></td>
           <td>{{p.scans}}</td>
