@@ -165,6 +165,67 @@ def init_db():
         if seed_version:
             cur.execute("DELETE FROM app_meta WHERE key='campaign_seed_version'")
             cur.execute("INSERT INTO app_meta(key,value) VALUES('campaign_seed_version',%s)",(seed_version,))
+    # Merge an optional Redfin campaign batch without deleting existing campaign data.
+    redfin_version=os.environ.get("REDFIN_IMPORT_VERSION","").strip()
+    redfin_file=os.path.join(os.path.dirname(__file__),"redfin_import_2026_11_23.csv")
+    imported_version=""
+    try:
+        cur.execute("SELECT value FROM app_meta WHERE key='redfin_import_version'")
+        rr=cur.fetchone()
+        imported_version=(rr or {}).get("value","")
+    except Exception:
+        imported_version=""
+
+    if redfin_version and imported_version != redfin_version and os.path.exists(redfin_file):
+        with open(redfin_file,"r",encoding="utf-8-sig",newline="") as fh:
+            for row in csv.DictReader(fh):
+                full=(row.get("address") or "").strip()
+                photo1=(row.get("photo_url") or "").strip()
+                photo2=(row.get("photo_url_2") or "").strip()
+                listing=(row.get("listing_url") or "").strip()
+                parts=[x.strip() for x in full.split(",")]
+                if len(parts) < 3:
+                    continue
+                street=parts[0]
+                city=parts[-2]
+                state_zip=parts[-1].split()
+                if len(state_zip) < 2:
+                    continue
+                state=state_zip[0]
+                zip_code=state_zip[1][:5]
+                cur.execute("SELECT id FROM properties WHERE LOWER(address)=LOWER(%s) AND zip=%s LIMIT 1",(street,zip_code))
+                if cur.fetchone():
+                    continue
+
+                photo_data=None
+                photo_mime=None
+                chosen_source=""
+                for candidate in (photo1,photo2):
+                    if not candidate:
+                        continue
+                    try:
+                        pr=requests.get(candidate,headers={"User-Agent":"Mozilla/5.0"},timeout=20)
+                        if pr.ok and pr.content and len(pr.content) <= 15*1024*1024:
+                            photo_data=pr.content
+                            photo_mime=(pr.headers.get("Content-Type") or "image/webp").split(";")[0]
+                            chosen_source=candidate
+                            break
+                    except Exception:
+                        pass
+
+                status="READY_FOR_MOCKUP" if photo_data else "PHOTO_NEEDED"
+                cur.execute(
+                    """INSERT INTO properties(
+                        address,city,state,zip,token,original_image,original_mime,
+                        image_source,image_source_2,listing_url,status,
+                        photo_verify_status,photo_verify_note
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'UNVERIFIED','')""",
+                    (street,city,state,zip_code,secrets.token_urlsafe(10),
+                     photo_data,photo_mime,chosen_source or photo1,photo2,listing,status)
+                )
+        cur.execute("DELETE FROM app_meta WHERE key='redfin_import_version'")
+        cur.execute("INSERT INTO app_meta(key,value) VALUES('redfin_import_version',%s)",(redfin_version,))
+
     c.commit(); c.close()
 
 
