@@ -1502,13 +1502,13 @@ html,body{margin:0!important;padding:0!important;width:8.5in;height:11in;font-fa
 .postcard:first-child{border-bottom:1px dashed #777}
 .photo{position:absolute;inset:0;width:8.5in;height:5.5in;object-fit:cover;object-position:center center;display:block;background:#dfe7eb}
 .shade{position:absolute;inset:0;background:
-  linear-gradient(90deg,rgba(0,34,54,.34) 0%,rgba(0,34,54,.20) 30%,rgba(0,0,0,.01) 58%,rgba(0,0,0,.06) 100%),
-  linear-gradient(0deg,rgba(0,0,0,.08),rgba(0,0,0,0) 42%)}
+  linear-gradient(90deg,rgba(0,34,54,.20) 0%,rgba(0,34,54,.10) 30%,rgba(0,0,0,0) 58%,rgba(0,0,0,.02) 100%),
+  linear-gradient(0deg,rgba(0,0,0,.03),rgba(0,0,0,0) 42%)}
 .brand{position:absolute;left:.35in;top:.22in;font-size:.16in;font-weight:800;letter-spacing:.01in}
-.headline{position:absolute;left:.35in;top:.80in;font-size:.42in;font-weight:900;line-height:.98;text-shadow:0 1px 3px rgba(0,0,0,.50)}
+.headline{position:absolute;left:.35in;top:.80in;font-size:.42in;font-weight:900;line-height:.98;text-shadow:0 1px 2px rgba(0,0,0,.35)}
 .headline span{color:#9acb3b}
-.sub{position:absolute;left:.36in;top:1.85in;width:3.4in;font-size:.16in;font-weight:600;line-height:1.25;text-shadow:0 1px 3px rgba(0,0,0,.55)}
-.benefit{position:absolute;left:.36in;top:2.55in;width:3.8in;font-size:.12in;line-height:1.35;color:#f8fbfc;text-shadow:0 1px 2px rgba(0,0,0,.50)}
+.sub{position:absolute;left:.36in;top:1.85in;width:3.4in;font-size:.16in;font-weight:600;line-height:1.25;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.benefit{position:absolute;left:.36in;top:2.55in;width:3.8in;font-size:.12in;line-height:1.35;color:#f8fbfc;text-shadow:0 1px 2px rgba(0,0,0,.30)}
 .qrbox{position:absolute;right:.35in;bottom:.28in;width:2.05in;background:rgba(255,255,255,.97);color:#073d5b;border:3px solid #9acb3b;border-radius:10px;padding:.07in;display:flex;gap:.07in;align-items:center;box-shadow:0 3px 10px rgba(0,0,0,.25)}
 .qrbox img{width:.72in;height:.72in;flex:0 0 auto}
 .qrtext{font-size:.078in;line-height:1.2}
