@@ -1492,28 +1492,28 @@ def postcard(pid):
 @page{size:8.5in 11in;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0!important;padding:0!important;width:8.5in;height:11in;font-family:Arial,Helvetica,sans-serif;background:white}
-.sheet{width:8.5in;height:11in;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;background:white;overflow:hidden}
-.postcard{width:4.25in;height:5.5in;position:relative;overflow:hidden;background:#073d5b;color:white;flex:0 0 5.5in}
+.sheet{width:8.5in;height:11in;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;background:white;overflow:hidden}
+.postcard{width:8.5in;height:5.5in;position:relative;overflow:hidden;background:#073d5b;color:white;flex:0 0 5.5in}
 .postcard:first-child{border-bottom:1px dashed #777}
-.photo{position:absolute;inset:0;width:4.25in;height:5.5in;object-fit:contain;object-position:center center;display:block;background:#dfe7eb}
+.photo{position:absolute;inset:0;width:8.5in;height:5.5in;object-fit:cover;object-position:center center;display:block;background:#dfe7eb}
 .shade{position:absolute;inset:0;background:
   linear-gradient(90deg,rgba(0,34,54,.34) 0%,rgba(0,34,54,.20) 30%,rgba(0,0,0,.01) 58%,rgba(0,0,0,.06) 100%),
   linear-gradient(0deg,rgba(0,0,0,.08),rgba(0,0,0,0) 42%)}
-.brand{position:absolute;left:.22in;top:.18in;font-size:.13in;font-weight:800;letter-spacing:.01in}
-.headline{position:absolute;left:.22in;top:.72in;font-size:.34in;font-weight:900;line-height:.98;text-shadow:0 1px 3px rgba(0,0,0,.50)}
+.brand{position:absolute;left:.35in;top:.22in;font-size:.16in;font-weight:800;letter-spacing:.01in}
+.headline{position:absolute;left:.35in;top:.80in;font-size:.42in;font-weight:900;line-height:.98;text-shadow:0 1px 3px rgba(0,0,0,.50)}
 .headline span{color:#9acb3b}
-.sub{position:absolute;left:.23in;top:1.62in;width:2.55in;font-size:.13in;font-weight:600;line-height:1.25;text-shadow:0 1px 3px rgba(0,0,0,.55)}
-.benefit{position:absolute;left:.23in;top:2.20in;width:2.65in;font-size:.09in;line-height:1.3;color:#f8fbfc;text-shadow:0 1px 2px rgba(0,0,0,.50)}
-.qrbox{position:absolute;right:.16in;bottom:.18in;width:1.75in;background:rgba(255,255,255,.97);color:#073d5b;border:3px solid #9acb3b;border-radius:10px;padding:.07in;display:flex;gap:.07in;align-items:center;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.sub{position:absolute;left:.36in;top:1.85in;width:3.4in;font-size:.16in;font-weight:600;line-height:1.25;text-shadow:0 1px 3px rgba(0,0,0,.55)}
+.benefit{position:absolute;left:.36in;top:2.55in;width:3.8in;font-size:.12in;line-height:1.35;color:#f8fbfc;text-shadow:0 1px 2px rgba(0,0,0,.50)}
+.qrbox{position:absolute;right:.35in;bottom:.28in;width:2.05in;background:rgba(255,255,255,.97);color:#073d5b;border:3px solid #9acb3b;border-radius:10px;padding:.07in;display:flex;gap:.07in;align-items:center;box-shadow:0 3px 10px rgba(0,0,0,.25)}
 .qrbox img{width:.72in;height:.72in;flex:0 0 auto}
 .qrtext{font-size:.078in;line-height:1.2}
 .qrtext b{font-size:.10in;display:block;margin-bottom:.02in}
-.contact{position:absolute;left:.23in;bottom:.22in;font-size:.09in;font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,.8)}
-.address{position:absolute;right:.16in;top:.16in;max-width:1.7in;font-size:.082in;font-weight:700;line-height:1.18;color:#000;text-align:right;background:#fff;padding:.07in .09in;border-radius:7px;text-shadow:none;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.contact{position:absolute;left:.36in;bottom:.28in;font-size:.11in;font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,.8)}
+.address{position:absolute;right:.35in;top:.22in;max-width:2.6in;font-size:.10in;font-weight:700;line-height:1.18;color:#000;text-align:right;background:#fff;padding:.07in .09in;border-radius:7px;text-shadow:none;box-shadow:0 2px 8px rgba(0,0,0,.18)}
 @media print{
   html,body,.sheet{width:8.5in!important;height:11in!important;margin:0!important;padding:0!important;overflow:hidden!important}
-  .postcard{width:4.25in!important;height:5.5in!important}
-  .photo{width:4.25in!important;height:5.5in!important}
+  .postcard{width:8.5in!important;height:5.5in!important;page-break-inside:avoid!important;break-inside:avoid!important}
+  .photo{width:8.5in!important;height:5.5in!important}
 }
 </style>
 </head>
