@@ -568,7 +568,7 @@ def health():
 @auth_required
 def dashboard():
     c=db(); cur=c.cursor()
-    cur.execute("SELECT id,address,city,state,zip,status,scans,mailed,quote_amount,photo_verify_status,(original_image IS NOT NULL) AS has_original,(mockup_image IS NOT NULL) AS has_mockup FROM properties WHERE id >= %s ORDER BY id",(ACTIVE_MIN_PROPERTY_ID,))
+    cur.execute("SELECT id,address,city,state,zip,status,scans,mailed,quote_amount,token,photo_verify_status,(original_image IS NOT NULL) AS has_original,(mockup_image IS NOT NULL) AS has_mockup FROM properties WHERE id >= %s ORDER BY id",(ACTIVE_MIN_PROPERTY_ID,))
     rows=cur.fetchall()
     cur.execute("SELECT COUNT(*) n FROM leads"); leads=cur.fetchone()["n"]
     c.close()
@@ -607,7 +607,7 @@ def dashboard():
           {% else %}
             <span style="background:#eef2f4;color:#52636d;border:1px solid #cfd8dd;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:800">UNVERIFIED</span>
           {% endif %}
-          <form method=post action="/property/{{p.id}}/auto-verify" style="display:inline"><button type=submit style="padding:5px 8px;font-size:11px">AI Verify</button></form><a class="btn" href="/property/{{p.id}}/verify-photo" style="padding:5px 8px;font-size:11px">Review</a>
+          <form method=post action="/property/{{p.id}}/auto-verify" style="display:inline"><button type=submit style="padding:5px 8px;font-size:11px">AI Verify</button></form><a class="btn" href="/property/{{p.id}}/verify-photo" style="padding:5px 8px;font-size:11px">Review</a><a class="btn green" href="/p/{{p.token}}?src=preview" target="_blank" style="padding:5px 8px;font-size:11px">Preview Landing Page</a>
         </div>
       {% endif %}
     </td><td>{{"✓" if p.has_original else "—"}}</td><td>{{"✓" if p.has_mockup else "—"}}</td><td><span class="badge">{{p.status}}</span></td><td>{{p.scans}}</td><td>{{("$%.0f"|format(p.quote_amount)) if p.quote_amount else "—"}}</td><td><form method=post action="/property/{{p.id}}/delete" onsubmit="return confirm('Delete {{p.address|e}}? This cannot be undone.');"><button type=submit style="background:#b42318;color:white;border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer">Delete</button></form></td></tr>{% endfor %}
@@ -1343,10 +1343,15 @@ def generate_mockup(pid):
 def qr_png(token):
     c=db(); cur=c.cursor(); cur.execute("SELECT id FROM properties WHERE token=%s",(token,)); p=cur.fetchone(); c.close()
     if not p:return "Not found",404
-    base=PUBLIC_BASE_URL or request.url_root.rstrip("/")
-    img=qrcode.make(f"{base}/p/{token}")
+    base=(PUBLIC_BASE_URL or request.url_root.rstrip("/")).rstrip("/")
+    landing_url=f"{base}/p/{token}?src=postcard"
+    img=qrcode.make(landing_url)
     out=io.BytesIO(); img.save(out,format="PNG")
-    return Response(out.getvalue(),mimetype="image/png")
+    return Response(
+        out.getvalue(),
+        mimetype="image/png",
+        headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
+    )
 
 @app.get("/p/<token>")
 def public_property(token):
