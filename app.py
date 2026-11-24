@@ -1,6 +1,6 @@
 import os, io, csv, base64, secrets, functools, html, sqlite3, math
 from datetime import datetime
-from flask import Flask, request, redirect, url_for, Response, render_template_string, flash
+from flask import Flask, request, redirect, url_for, Response, render_template_string, flash, make_response
 import qrcode
 import requests
 import psycopg2
@@ -98,6 +98,15 @@ def init_db():
     CREATE TABLE IF NOT EXISTS app_meta(
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS qr_scans(
+      id SERIAL PRIMARY KEY,
+      property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+      scan_key TEXT UNIQUE NOT NULL,
+      user_agent TEXT NOT NULL DEFAULT '',
+      submitted BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      submitted_at TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS leads(
       id SERIAL PRIMARY KEY,
@@ -632,13 +641,18 @@ def dashboard():
     cur.execute("SELECT id,address,city,state,zip,status,scans,mailed,quote_amount,token,photo_verify_status,(original_image IS NOT NULL) AS has_original,(mockup_image IS NOT NULL) AS has_mockup FROM properties WHERE id >= %s ORDER BY id",(ACTIVE_MIN_PROPERTY_ID,))
     rows=cur.fetchall()
     cur.execute("SELECT COUNT(*) n FROM leads"); leads=cur.fetchone()["n"]
+    try:
+        cur.execute("SELECT COUNT(*) n FROM qr_scans WHERE submitted=FALSE")
+        scan_no_form=cur.fetchone()["n"]
+    except Exception:
+        scan_no_form=0
     c.close()
     stats={
       "total":len(rows),"photos":sum(1 for r in rows if r["has_original"]),
       "mockups":sum(1 for r in rows if r["has_mockup"]),
       "approved":sum(1 for r in rows if r["status"]=="APPROVED"),
       "photo_issues":sum(1 for r in rows if r["has_original"] and r["photo_verify_status"] in ("UNVERIFIED","NEEDS_REVIEW","WRONG_PHOTO")),
-      "scans":sum(r["scans"] for r in rows),"leads":leads
+      "scans":sum(r["scans"] for r in rows),"leads":leads,"scan_no_form":scan_no_form
     }
     body="""
     <div class="grid">
@@ -647,6 +661,7 @@ def dashboard():
       <a class="card stat" href="/list/mockups" style="text-decoration:none;color:inherit">Mockups<strong>{{s.mockups}}</strong></a>
       <a class="card stat" href="/list/approved" style="text-decoration:none;color:inherit">Approved<strong>{{s.approved}}</strong></a>
       <a class="card stat" href="/list/photo-issues" style="text-decoration:none;color:inherit;border:2px solid #e8b04b">Photo Issues<strong>{{s.photo_issues}}</strong><span class="muted">Unverified / review / wrong</span></a>
+      <a class="card stat" href="/scan-activity" style="text-decoration:none;color:inherit;border:2px solid #e8b04b">Scanned — No Form<strong>{{s.scan_no_form}}</strong><span class="muted">Potential interest</span></a>
       <a class="card stat" href="/list/scans" style="text-decoration:none;color:inherit">QR scans<strong>{{s.scans}}</strong></a>
       <a class="card stat" href="/leads" style="text-decoration:none;color:inherit">Leads<strong>{{s.leads}}</strong></a>
     </div>
@@ -796,6 +811,56 @@ def property_list(kind):
     </div>
     """
     return page(title,body,rows=rows,title_text=title)
+
+@app.get("/scan-activity")
+@auth_required
+def scan_activity():
+    c=db(); cur=c.cursor()
+    try:
+        cur.execute("""SELECT q.id,q.created_at,q.submitted,q.submitted_at,q.user_agent,
+                              p.address,p.city,p.state,p.zip
+                       FROM qr_scans q
+                       JOIN properties p ON p.id=q.property_id
+                       ORDER BY q.id DESC
+                       LIMIT 250""")
+        rows=cur.fetchall()
+    except Exception:
+        rows=[]
+    c.close()
+    no_form=sum(1 for r in rows if not r["submitted"])
+    body="""
+    <div class=card>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div><h2 style="margin:0">QR Scan Activity</h2><div class=muted>{{no_form}} recent scans have not submitted the form.</div></div>
+        <a class="btn gray" href="/">Back to dashboard</a>
+      </div>
+    </div>
+    <div class=card style="overflow:auto;padding:0">
+      <table>
+        <thead><tr><th>Property</th><th>Scanned</th><th>Result</th><th>Device</th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr>
+            <td><b>{{r.address}}</b><br><span class=muted>{{r.city}}, {{r.state}} {{r.zip}}</span></td>
+            <td>{{r.created_at}}</td>
+            <td>
+              {% if r.submitted %}
+                <span style="background:#e8f6e8;color:#176b2c;border:1px solid #a8d5ae;border-radius:999px;padding:5px 8px;font-size:11px;font-weight:800">✓ FORM SUBMITTED</span>
+              {% else %}
+                <span style="background:#fff4d6;color:#825500;border:1px solid #efd27a;border-radius:999px;padding:5px 8px;font-size:11px;font-weight:800">SCAN — NO FORM</span>
+              {% endif %}
+            </td>
+            <td><span class=muted>{{r.user_agent or "Unknown device"}}</span></td>
+          </tr>
+        {% else %}
+          <tr><td colspan=4 class=muted>No tracked postcard scans yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class=card><div class=muted><b>Privacy note:</b> this tracks the property, time and browser/device information. It does not identify the homeowner by name unless they submit the form.</div></div>
+    """
+    return page("QR Scan Activity",body,rows=rows,no_form=no_form)
 
 @app.get("/leads")
 @auth_required
@@ -1418,7 +1483,29 @@ def qr_png(token):
 def public_property(token):
     c=db(); cur=c.cursor(); cur.execute("SELECT * FROM properties WHERE token=%s",(token,)); p=cur.fetchone()
     if not p: c.close(); return "Not found",404
-    cur.execute("UPDATE properties SET scans=scans+1 WHERE id=%s",(p["id"],)); c.commit(); c.close()
+
+    scan_key=None
+    if request.args.get("src")=="postcard":
+        existing_key=request.cookies.get("rs_scan_key","")
+        existing=None
+        if existing_key:
+            try:
+                cur.execute("SELECT id,property_id FROM qr_scans WHERE scan_key=%s",(existing_key,))
+                existing=cur.fetchone()
+            except Exception:
+                existing=None
+        if existing and existing["property_id"]==p["id"]:
+            scan_key=existing_key
+        else:
+            scan_key=secrets.token_urlsafe(18)
+            cur.execute(
+                "INSERT INTO qr_scans(property_id,scan_key,user_agent,submitted) VALUES(%s,%s,%s,FALSE)",
+                (p["id"],scan_key,(request.headers.get("User-Agent") or "")[:500])
+            )
+            cur.execute("UPDATE properties SET scans=scans+1 WHERE id=%s",(p["id"],))
+        c.commit()
+    c.close()
+
     img_kind="mockup" if p["mockup_image"] is not None else "original"
     phone_digits="".join(ch for ch in BUSINESS_PHONE if ch.isdigit())
     estimate=float(p["quote_amount"] or 0)
@@ -1428,7 +1515,7 @@ def public_property(token):
     buffer=max(0, LIGHTING_ESTIMATE_BUFFER_PCT) / 100.0
     estimate_low=max(LIGHTING_MINIMUM_PRICE, estimate * (1-buffer)) if estimate > 0 else 0
     estimate_high=estimate * (1+buffer) if estimate > 0 else 0
-    return render_template_string("""
+    html_page=render_template_string("""
 <!doctype html>
 <html>
 <head>
@@ -1523,13 +1610,24 @@ form{margin-top:10px}input,textarea{width:100%;box-sizing:border-box;padding:13p
 </div>
 </body></html>
 """,biz=BUSINESS_NAME,p=p,kind=img_kind,phone=BUSINESS_PHONE,phone_digits=phone_digits,estimate=estimate,estimate_low=estimate_low,estimate_high=estimate_high,linear_ft=linear_ft)
+    resp=make_response(html_page)
+    if scan_key:
+        resp.set_cookie("rs_scan_key",scan_key,max_age=1800,httponly=True,samesite="Lax")
+    return resp
 
 @app.post("/lead/<token>")
 def lead(token):
     c=db(); cur=c.cursor(); cur.execute("SELECT * FROM properties WHERE token=%s",(token,)); p=cur.fetchone()
     if not p: c.close(); return "Not found",404
     payload={"name":request.form.get("name",""),"phone":request.form.get("phone",""),"email":request.form.get("email",""),"notes":request.form.get("notes","")}
-    cur.execute("INSERT INTO leads(property_id,name,phone,email,notes) VALUES(%s,%s,%s,%s,%s)",(p["id"],payload["name"],payload["phone"],payload["email"],payload["notes"])); c.commit(); c.close()
+    cur.execute("INSERT INTO leads(property_id,name,phone,email,notes) VALUES(%s,%s,%s,%s,%s)",(p["id"],payload["name"],payload["phone"],payload["email"],payload["notes"]))
+    scan_key=request.cookies.get("rs_scan_key","")
+    if scan_key:
+        try:
+            cur.execute("UPDATE qr_scans SET submitted=TRUE,submitted_at=NOW() WHERE scan_key=%s AND property_id=%s",(scan_key,p["id"]))
+        except Exception:
+            pass
+    c.commit(); c.close()
     if GHL_WEBHOOK_URL:
         try:
             requests.post(GHL_WEBHOOK_URL,json={"source":"RS Permanent Lighting postcard","property":p["address"],**payload},timeout=12)
